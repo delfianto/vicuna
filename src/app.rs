@@ -203,11 +203,19 @@ impl App {
     fn on_key_chat(&mut self, key: KeyEvent) -> Vec<Action> {
         match key.code {
             KeyCode::PageUp => {
-                self.chat_scroll = self.chat_scroll.saturating_sub(5);
+                self.chat_scroll = self.chat_scroll.saturating_sub(15);
                 return vec![];
             }
             KeyCode::PageDown => {
-                self.chat_scroll = self.chat_scroll.saturating_add(5);
+                self.chat_scroll = self.chat_scroll.saturating_add(15);
+                return vec![];
+            }
+            KeyCode::Up if self.chat_focus != ChatFocus::Sessions => {
+                self.chat_scroll = self.chat_scroll.saturating_sub(3);
+                return vec![];
+            }
+            KeyCode::Down if self.chat_focus != ChatFocus::Sessions => {
+                self.chat_scroll = self.chat_scroll.saturating_add(3);
                 return vec![];
             }
             KeyCode::Left if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {

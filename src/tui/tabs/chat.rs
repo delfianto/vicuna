@@ -49,9 +49,12 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
     f.render_stateful_widget(sessions_list, chunks[0], &mut state);
 
     // Chat Area (Right)
+    let input_lines = app.input.lines().len() as u16;
+    let input_height = (input_lines + 2).clamp(3, 10);
+
     let chat_chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(3)].as_ref()) 
+        .constraints([Constraint::Min(1), Constraint::Length(input_height)].as_ref()) 
         .split(chunks[1]);
 
     let messages_area = chat_chunks[0];
@@ -107,4 +110,18 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
     );
     
     f.render_widget(&input, input_area);
+
+    // Render input scrollbar if content is larger than input area
+    if input_lines > input_height.saturating_sub(2) {
+        let scrollbar = ratatui::widgets::Scrollbar::new(ratatui::widgets::ScrollbarOrientation::VerticalRight)
+            .begin_symbol(Some("▲"))
+            .end_symbol(Some("▼"));
+        let mut scrollbar_state = ratatui::widgets::ScrollbarState::new(input_lines as usize)
+            .position(app.input.cursor().0);
+        f.render_stateful_widget(
+            scrollbar,
+            input_area.inner(ratatui::layout::Margin { vertical: 1, horizontal: 0 }),
+            &mut scrollbar_state,
+        );
+    }
 }
