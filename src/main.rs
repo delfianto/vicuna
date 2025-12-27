@@ -139,6 +139,17 @@ async fn main() -> Result<()> {
                             .ok();
                     }
                 },
+                Action::ShowModelInfo(name) => match client.show_model(&name).await {
+                    Ok(info) => {
+                        event_tx_backend.send(Event::ModelInfoFetched(info)).ok();
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to fetch model info: {:?}", e);
+                        event_tx_backend
+                            .send(Event::Error(format!("Failed to fetch model info: {}", e)))
+                            .ok();
+                    }
+                },
                 Action::CreateSession(id, title, model) => {
                     if let Err(e) = db::repo::create_session(&db_conn, &id, &title, &model).await {
                         tracing::error!("Failed to create session: {:?}", e);

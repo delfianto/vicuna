@@ -24,13 +24,11 @@ pub struct ListModelsResponse {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-#[allow(dead_code)]
 pub struct ShowModelRequest {
     pub name: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-#[allow(dead_code)]
 pub struct ShowModelResponse {
     pub license: Option<String>,
     pub modelfile: Option<String>,

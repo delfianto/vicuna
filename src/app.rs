@@ -11,6 +11,7 @@ pub enum Action {
     Quit,
     DeleteModel(String),
     PullModel(String),
+    ShowModelInfo(String),
     Generate(String, String),
     FetchSessions,
     LoadSession(String),
@@ -37,6 +38,12 @@ pub enum ChatFocus {
     Sessions,
 }
 
+#[derive(PartialEq, Debug)]
+pub enum ModelsFocus {
+    List,
+    Info,
+}
+
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum SortColumn {
     Name,
@@ -45,15 +52,19 @@ pub enum SortColumn {
 }
 
 pub struct App {
-    #[allow(dead_code)]
-    pub config: Config,
+    pub _config: Config,
     pub current_tab: CurrentTab,
     pub chat_focus: ChatFocus,
+    pub models_focus: ModelsFocus,
     pub should_quit: bool,
 
     pub models: Vec<Model>,
     pub selected_model_index: usize,
     pub sort_column: SortColumn,
+
+    pub show_info: bool,
+    pub model_info: Option<crate::api::types::ShowModelResponse>,
+    pub info_scroll: u16,
 
     pub input: tui_textarea::TextArea<'static>,
     pub messages: Vec<Message>,
@@ -83,13 +94,17 @@ impl App {
         let popup = Popup::new("Pull Model".to_string());
 
         Self {
-            config,
+            _config: config,
             current_tab: CurrentTab::Models,
             chat_focus: ChatFocus::Input,
+            models_focus: ModelsFocus::List,
             should_quit: false,
             models: Vec::new(),
             selected_model_index: 0,
             sort_column: SortColumn::Name,
+            show_info: false,
+            model_info: None,
+            info_scroll: 0,
             input,
             messages: Vec::new(),
             is_generating: false,
@@ -157,16 +172,39 @@ impl App {
             }
             KeyCode::Char('q') => match self.current_tab {
                 CurrentTab::Models => {
-                    self.should_quit = true;
-                    vec![Action::Quit]
+                    if self.show_info {
+                        self.on_key_models(key)
+                    } else {
+                        self.should_quit = true;
+                        vec![Action::Quit]
+                    }
                 }
                 CurrentTab::Chat => self.on_key_chat(key),
             },
-            KeyCode::Tab => {
+            KeyCode::Tab if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
                 self.current_tab = match self.current_tab {
                     CurrentTab::Models => CurrentTab::Chat,
                     CurrentTab::Chat => CurrentTab::Models,
                 };
+                vec![]
+            }
+            KeyCode::Tab => {
+                match self.current_tab {
+                    CurrentTab::Models => {
+                        if self.show_info {
+                            self.models_focus = match self.models_focus {
+                                ModelsFocus::List => ModelsFocus::Info,
+                                ModelsFocus::Info => ModelsFocus::List,
+                            };
+                        }
+                    }
+                    CurrentTab::Chat => {
+                        self.chat_focus = match self.chat_focus {
+                            ChatFocus::Input => ChatFocus::Sessions,
+                            ChatFocus::Sessions => ChatFocus::Input,
+                        };
+                    }
+                }
                 vec![]
             }
             _ => match self.current_tab {
@@ -377,16 +415,53 @@ impl App {
     }
 
     fn on_key_models(&mut self, key: KeyEvent) -> Vec<Action> {
+        if self.show_info {
+            match key.code {
+                KeyCode::Char('i') | KeyCode::Esc => {
+                    self.show_info = false;
+                    self.models_focus = ModelsFocus::List;
+                    return vec![];
+                }
+                KeyCode::PageUp => {
+                    self.info_scroll = self.info_scroll.saturating_sub(15);
+                    return vec![];
+                }
+                KeyCode::PageDown => {
+                    self.info_scroll = self.info_scroll.saturating_add(15);
+                    return vec![];
+                }
+                KeyCode::Up if self.models_focus == ModelsFocus::Info => {
+                    self.info_scroll = self.info_scroll.saturating_sub(3);
+                    return vec![];
+                }
+                KeyCode::Down if self.models_focus == ModelsFocus::Info => {
+                    self.info_scroll = self.info_scroll.saturating_add(3);
+                    return vec![];
+                }
+                _ => {}
+            }
+        }
+
         match key.code {
             KeyCode::Char('j') | KeyCode::Down => {
                 if !self.models.is_empty() && self.selected_model_index < self.models.len() - 1 {
                     self.selected_model_index += 1;
+                    if self.show_info
+                        && let Some(model) = self.models.get(self.selected_model_index)
+                    {
+                        return vec![Action::ShowModelInfo(model.name.clone())];
+                    }
                 }
                 vec![]
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 if self.selected_model_index > 0 {
                     self.selected_model_index -= 1;
+                    if self.show_info
+                        && let Some(model) = self.models.get(self.selected_model_index)
+                    {
+                        return vec![Action::ShowModelInfo(model.name.clone())];
+                    }
                 }
                 vec![]
             }
@@ -400,6 +475,16 @@ impl App {
             KeyCode::Char('p') => {
                 self.show_popup = true;
                 vec![]
+            }
+            KeyCode::Char('i') => {
+                if let Some(model) = self.models.get(self.selected_model_index) {
+                    self.show_info = true;
+                    self.info_scroll = 0;
+                    self.models_focus = ModelsFocus::Info;
+                    vec![Action::ShowModelInfo(model.name.clone())]
+                } else {
+                    vec![]
+                }
             }
             KeyCode::Char('s') => {
                 self.sort_column = match self.sort_column {
@@ -448,26 +533,59 @@ mod tests {
     #[test]
     fn test_app_tab_switching() {
         let config = Config {
-            config_dir: "/tmp".into(),
-            data_dir: "/tmp".into(),
+            _config_dir: "/tmp".into(),
+            _data_dir: "/tmp".into(),
             log_dir: "/tmp".into(),
             db_path: "/tmp/test.db".into(),
         };
         let mut app = App::new(config);
         assert_eq!(app.current_tab, CurrentTab::Models);
 
-        app.on_key(mock_key(KeyCode::Tab));
+        app.on_key(mock_key_ctrl(KeyCode::Tab));
         assert_eq!(app.current_tab, CurrentTab::Chat);
 
-        app.on_key(mock_key(KeyCode::Tab));
+        app.on_key(mock_key_ctrl(KeyCode::Tab));
         assert_eq!(app.current_tab, CurrentTab::Models);
+    }
+
+    #[test]
+    fn test_app_pane_switching() {
+        let config = Config {
+            _config_dir: "/tmp".into(),
+            _data_dir: "/tmp".into(),
+            log_dir: "/tmp".into(),
+            db_path: "/tmp/test.db".into(),
+        };
+        let mut app = App::new(config);
+        
+        // Models Tab (no info)
+        app.current_tab = CurrentTab::Models;
+        app.show_info = false;
+        app.on_key(mock_key(KeyCode::Tab));
+        assert_eq!(app.models_focus, ModelsFocus::List); // Should not change if info hidden
+
+        // Models Tab (with info)
+        app.show_info = true;
+        app.models_focus = ModelsFocus::List;
+        app.on_key(mock_key(KeyCode::Tab));
+        assert_eq!(app.models_focus, ModelsFocus::Info);
+        app.on_key(mock_key(KeyCode::Tab));
+        assert_eq!(app.models_focus, ModelsFocus::List);
+
+        // Chat Tab
+        app.current_tab = CurrentTab::Chat;
+        app.chat_focus = ChatFocus::Input;
+        app.on_key(mock_key(KeyCode::Tab));
+        assert_eq!(app.chat_focus, ChatFocus::Sessions);
+        app.on_key(mock_key(KeyCode::Tab));
+        assert_eq!(app.chat_focus, ChatFocus::Input);
     }
 
     #[test]
     fn test_chat_focus_switching() {
         let config = Config {
-            config_dir: "/tmp".into(),
-            data_dir: "/tmp".into(),
+            _config_dir: "/tmp".into(),
+            _data_dir: "/tmp".into(),
             log_dir: "/tmp".into(),
             db_path: "/tmp/test.db".into(),
         };
@@ -485,8 +603,8 @@ mod tests {
     #[test]
     fn test_quit_handling() {
         let config = Config {
-            config_dir: "/tmp".into(),
-            data_dir: "/tmp".into(),
+            _config_dir: "/tmp".into(),
+            _data_dir: "/tmp".into(),
             log_dir: "/tmp".into(),
             db_path: "/tmp/test.db".into(),
         };
@@ -500,8 +618,8 @@ mod tests {
     #[test]
     fn test_sanitized_name_sorting() {
         let config = Config {
-            config_dir: "/tmp".into(),
-            data_dir: "/tmp".into(),
+            _config_dir: "/tmp".into(),
+            _data_dir: "/tmp".into(),
             log_dir: "/tmp".into(),
             db_path: "/tmp/test.db".into(),
         };
