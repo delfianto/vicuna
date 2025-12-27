@@ -77,6 +77,7 @@ impl App {
     pub fn new(config: Config) -> Self {
         let mut input = tui_textarea::TextArea::default();
         input.set_placeholder_text("Type a message...");
+        input.set_cursor_line_style(ratatui::style::Style::default());
         input.set_block(
             ratatui::widgets::Block::default()
                 .borders(ratatui::widgets::Borders::ALL)
