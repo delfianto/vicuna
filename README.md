@@ -10,9 +10,9 @@
 
 ## Features
 
-- **🚀 High Performance:** Built with Rust and `ratatui`.
+- **🚀 Should be Fast:** Built with Rust and `ratatui`.
 - **💾 Local Database:** SQLite backend (via LibSQL) stores sessions and message history.
-- **🧠 Model Management:** View, pull, and delete models directly from the TUI.
+- **🤖 Model Management:** View, pull, inspect, and delete models directly from the TUI.
 - **📝 Markdown Support:** Rich rendering of assistant responses including code blocks and formatting.
 - **🔄 Streaming:** Real-time token streaming for immediate feedback.
 - **🧹 Auto-Cleanup:** Deleting a model automatically removes its associated chat history.
