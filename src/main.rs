@@ -25,10 +25,10 @@ async fn main() -> Result<()> {
     tracing::info!("Vicuna starting up...");
 
     let repo = Arc::new(Repository::new(&config.db_path).await?);
-    let client = OllamaClient::new("http://localhost:11434".to_string());
+    let client = OllamaClient::new(config.ollama_url.clone());
 
-    let (action_tx, action_rx) = mpsc::unbounded_channel::<Action>();
-    let (event_tx, event_rx) = mpsc::unbounded_channel();
+    let (action_tx, action_rx) = mpsc::channel::<Action>(100);
+    let (event_tx, event_rx) = mpsc::channel(100);
 
     let event_tx_input = event_tx.clone();
     tokio::spawn(async move {
@@ -38,11 +38,11 @@ async fn main() -> Result<()> {
             tokio::select! {
                 Some(Ok(evt)) = reader.next() => {
                     if let crossterm::event::Event::Key(key) = evt {
-                        event_tx_input.send(crate::tui::events::Event::Input(key)).ok();
+                        event_tx_input.send(crate::tui::events::Event::Input(key)).await.ok();
                     }
                 }
                 _ = interval.tick() => {
-                    event_tx_input.send(crate::tui::events::Event::Tick).ok();
+                    event_tx_input.send(crate::tui::events::Event::Tick).await.ok();
                 }
             }
         }
@@ -58,8 +58,8 @@ async fn main() -> Result<()> {
     let mut terminal = tui::init()?;
     let app = App::new(config.clone());
 
-    action_tx.send(Action::FetchModels).ok();
-    action_tx.send(Action::FetchSessions).ok();
+    action_tx.send(Action::FetchModels).await.ok();
+    action_tx.send(Action::FetchSessions).await.ok();
 
     let res = tui::run_app(&mut terminal, app, event_rx, event_tx, action_tx).await;
 

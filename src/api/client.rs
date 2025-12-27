@@ -1,22 +1,37 @@
 use crate::api::types::*;
-use anyhow::Result;
 use async_stream::try_stream;
 use futures::stream::{Stream, StreamExt};
 use reqwest::Client;
+use std::sync::Arc;
+use thiserror::Error;
 use tokio_util::codec::{FramedRead, LinesCodec};
 use tokio_util::io::StreamReader;
+
+#[derive(Error, Debug)]
+pub enum OllamaError {
+    #[error("Network error: {0}")]
+    Network(#[from] reqwest::Error),
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("Codec error: {0}")]
+    Codec(#[from] tokio_util::codec::LinesCodecError),
+}
+
+pub type Result<T> = std::result::Result<T, OllamaError>;
 
 #[derive(Clone)]
 pub struct OllamaClient {
     client: Client,
-    base_url: String,
+    base_url: Arc<String>,
 }
 
 impl OllamaClient {
     pub fn new(base_url: String) -> Self {
         Self {
             client: Client::new(),
-            base_url,
+            base_url: Arc::new(base_url),
         }
     }
 
@@ -32,7 +47,13 @@ impl OllamaClient {
         let req = ShowModelRequest {
             name: name.to_string(),
         };
-        let resp = self.client.post(&url).json(&req).send().await?;
+        let resp = self
+            .client
+            .post(&url)
+            .json(&req)
+            .send()
+            .await?
+            .error_for_status()?;
         let info = resp.json().await?;
         Ok(info)
     }
@@ -56,7 +77,7 @@ impl OllamaClient {
         let url = format!("{}/api/generate", self.base_url);
 
         try_stream! {
-            let res = client.post(&url).json(&req).send().await?;
+            let res = client.post(&url).json(&req).send().await?.error_for_status()?;
             let bytes_stream = res.bytes_stream().map(|res| {
                 res.map_err(std::io::Error::other)
             });
@@ -82,7 +103,7 @@ impl OllamaClient {
         let url = format!("{}/api/pull", self.base_url);
 
         try_stream! {
-            let res = client.post(&url).json(&req).send().await?;
+            let res = client.post(&url).json(&req).send().await?.error_for_status()?;
             let bytes_stream = res.bytes_stream().map(|res| {
                 res.map_err(std::io::Error::other)
             });

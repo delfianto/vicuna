@@ -18,9 +18,13 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
         .sessions
         .iter()
         .enumerate()
-        .map(|(i, (_id, title, model, _date))| {
-            let display_title = if title.is_empty() { "Untitled" } else { title };
-            let display = format!("{} [{}]", display_title, model);
+        .map(|(i, session)| {
+            let display_title = if session.title.is_empty() {
+                "Untitled"
+            } else {
+                &session.title
+            };
+            let display = format!("{} [{}]", display_title, session.model);
             ListItem::new(display).style(styles::get_rainbow_style(i))
         })
         .collect();
@@ -57,9 +61,10 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
     f.render_stateful_widget(sessions_list, chunks[0], &mut state);
 
     let estimated_width = chunks[1].width.saturating_sub(4).max(1);
-    let mut visual_input_lines = 0;
+    let mut visual_input_lines: u16 = 0;
     for line in app.input.lines() {
-        let len = line.chars().count() as u16;
+        let s: &str = line.as_str();
+        let len = s.chars().count() as u16;
         if len == 0 {
             visual_input_lines += 1;
         } else {
