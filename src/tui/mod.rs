@@ -55,8 +55,8 @@ pub async fn run_app(
                 .direction(Direction::Vertical)
                 .constraints([
                     Constraint::Min(0),
-                    Constraint::Length(1), // Status Bar
-                    Constraint::Length(1), // Help Bar
+                    Constraint::Length(1),
+                    Constraint::Length(1),
                 ])
                 .split(f.area());
 
