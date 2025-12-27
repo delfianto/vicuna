@@ -49,8 +49,17 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
     f.render_stateful_widget(sessions_list, chunks[0], &mut state);
 
     // Chat Area (Right)
-    let input_lines = app.input.lines().len() as u16;
-    let input_height = (input_lines + 2).clamp(3, 10);
+    let estimated_width = chunks[1].width.saturating_sub(4).max(1); // Account for borders and padding
+    let mut visual_input_lines = 0;
+    for line in app.input.lines() {
+        let len = line.chars().count() as u16;
+        if len == 0 {
+            visual_input_lines += 1;
+        } else {
+            visual_input_lines += (len + estimated_width - 1) / estimated_width;
+        }
+    }
+    let input_height = (visual_input_lines + 2).clamp(3, 15);
 
     let chat_chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -103,7 +112,7 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
     let mut input = app.input.clone();
     input.set_block(
         ratatui::widgets::Block::default()
-            .borders(ratatui::widgets::Borders::ALL)
+            .borders(Borders::ALL)
             .border_type(input_border_type)
             .title("Input")
             .border_style(input_border_style)
@@ -112,11 +121,11 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(&input, input_area);
 
     // Render input scrollbar if content is larger than input area
-    if input_lines > input_height.saturating_sub(2) {
+    if visual_input_lines > input_height.saturating_sub(2) {
         let scrollbar = ratatui::widgets::Scrollbar::new(ratatui::widgets::ScrollbarOrientation::VerticalRight)
             .begin_symbol(Some("▲"))
             .end_symbol(Some("▼"));
-        let mut scrollbar_state = ratatui::widgets::ScrollbarState::new(input_lines as usize)
+        let mut scrollbar_state = ratatui::widgets::ScrollbarState::new(visual_input_lines as usize)
             .position(app.input.cursor().0);
         f.render_stateful_widget(
             scrollbar,
