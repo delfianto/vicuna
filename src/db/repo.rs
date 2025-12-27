@@ -1,7 +1,7 @@
 use crate::api::types::{Model, ModelName, SessionId};
 use crate::utils::vram;
 use anyhow::Result;
-use libsql::{named_params, Connection};
+use libsql::{Connection, named_params};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
