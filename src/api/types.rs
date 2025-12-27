@@ -67,3 +67,18 @@ pub struct GenerateResponse {
     pub eval_count: Option<u32>,
     pub eval_duration: Option<u64>,
 }
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PullRequest {
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PullResponse {
+    pub status: String,
+    pub digest: Option<String>,
+    pub total: Option<u64>,
+    pub completed: Option<u64>,
+}

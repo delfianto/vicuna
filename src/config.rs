@@ -35,3 +35,16 @@ impl Config {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config_new() {
+        let config = Config::new();
+        assert!(config.is_ok());
+        let cfg = config.unwrap();
+        assert!(cfg.db_path.to_string_lossy().contains("vicuna.db"));
+    }
+}
