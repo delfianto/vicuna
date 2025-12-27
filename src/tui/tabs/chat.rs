@@ -199,7 +199,7 @@ fn draw_empty_chat(f: &mut ratatui::Frame, app: &App, area: Rect) {
                 Constraint::Percentage((100 - (image_width * 100 / inner_area.width.max(1))) / 2),
             ])
             .split(image_area);
-        
+
         let image_widget = ratatui_image::Image::new(logo.as_ref());
         f.render_widget(image_widget, horizontal_layout[1]);
     }

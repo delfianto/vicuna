@@ -3,6 +3,8 @@ use anyhow::Result;
 use async_stream::try_stream;
 use futures::stream::{Stream, StreamExt};
 use reqwest::Client;
+use tokio_util::codec::{FramedRead, LinesCodec};
+use tokio_util::io::StreamReader;
 
 #[derive(Clone)]
 pub struct OllamaClient {
@@ -55,21 +57,18 @@ impl OllamaClient {
 
         try_stream! {
             let res = client.post(&url).json(&req).send().await?;
-            let mut stream = res.bytes_stream();
-            let mut buffer = String::new();
+            let bytes_stream = res.bytes_stream().map(|res| {
+                res.map_err(std::io::Error::other)
+            });
+            let reader = StreamReader::new(bytes_stream);
+            let mut framed = FramedRead::new(reader, LinesCodec::new());
 
-            while let Some(item) = stream.next().await {
-                let bytes = item?;
-                let s = String::from_utf8_lossy(&bytes);
-                buffer.push_str(&s);
-
-                while let Some(pos) = buffer.find('\n') {
-                    let line: String = buffer.drain(..pos+1).collect();
-                    let line = line.trim();
-                    if !line.is_empty() {
-                         let resp: GenerateResponse = serde_json::from_str(line)?;
-                         yield resp;
-                    }
+            while let Some(line) = framed.next().await {
+                let line = line?;
+                let line = line.trim();
+                if !line.is_empty() {
+                    let resp: GenerateResponse = serde_json::from_str(line)?;
+                    yield resp;
                 }
             }
         }
@@ -84,21 +83,18 @@ impl OllamaClient {
 
         try_stream! {
             let res = client.post(&url).json(&req).send().await?;
-            let mut stream = res.bytes_stream();
-            let mut buffer = String::new();
+            let bytes_stream = res.bytes_stream().map(|res| {
+                res.map_err(std::io::Error::other)
+            });
+            let reader = StreamReader::new(bytes_stream);
+            let mut framed = FramedRead::new(reader, LinesCodec::new());
 
-            while let Some(item) = stream.next().await {
-                let bytes = item?;
-                let s = String::from_utf8_lossy(&bytes);
-                buffer.push_str(&s);
-
-                while let Some(pos) = buffer.find('\n') {
-                    let line: String = buffer.drain(..pos+1).collect();
-                    let line = line.trim();
-                    if !line.is_empty() {
-                         let resp: PullResponse = serde_json::from_str(line)?;
-                         yield resp;
-                    }
+            while let Some(line) = framed.next().await {
+                let line = line?;
+                let line = line.trim();
+                if !line.is_empty() {
+                    let resp: PullResponse = serde_json::from_str(line)?;
+                    yield resp;
                 }
             }
         }

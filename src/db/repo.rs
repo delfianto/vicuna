@@ -3,6 +3,19 @@ use crate::utils::vram;
 use anyhow::Result;
 use libsql::{Connection, params};
 
+pub struct Repository {
+    pub conn: Connection,
+}
+
+impl Repository {
+    pub async fn new(db_path: &std::path::Path) -> Result<Self> {
+        let db = libsql::Builder::new_local(db_path).build().await?;
+        let conn = db.connect()?;
+        crate::db::schema::migrate(&conn).await?;
+        Ok(Self { conn })
+    }
+}
+
 pub async fn upsert_model(conn: &Connection, model: &Model) -> Result<()> {
     let family = model
         .details

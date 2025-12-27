@@ -11,5 +11,6 @@ pub enum Event {
     TokenReceived(String),
     GenerationDone,
     Error(String),
+    ImageLoaded(image::DynamicImage),
     ImageInitialized(Box<dyn ratatui_image::protocol::Protocol>),
 }

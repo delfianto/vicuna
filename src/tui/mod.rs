@@ -43,6 +43,7 @@ pub async fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     mut app: App,
     mut event_rx: mpsc::UnboundedReceiver<Event>,
+    event_tx: mpsc::UnboundedSender<Event>,
     action_tx: mpsc::UnboundedSender<Action>,
 ) -> Result<()> {
     let _ = action_tx.send(Action::FetchModels);
@@ -133,7 +134,7 @@ pub async fn run_app(
                         && let Some(session_id) = &app.current_session_id
                     {
                         let _ = action_tx.send(Action::SaveMessage(
-                            session_id.clone(),
+                            crate::api::types::SessionId(session_id.clone()),
                             "assistant".to_string(),
                             last_msg.content.clone(),
                         ));
@@ -141,6 +142,26 @@ pub async fn run_app(
                 }
                 Event::Error(msg) => {
                     app.show_error(&msg);
+                }
+                Event::ImageLoaded(img) => {
+                    let event_tx_img = event_tx.clone();
+                    tokio::task::spawn_blocking(move || {
+                        let protocol = ratatui_image::picker::Picker::from_termios().ok().and_then(
+                            |mut picker| {
+                                picker.guess_protocol();
+                                picker
+                                    .new_protocol(
+                                        img,
+                                        Rect::new(0, 0, 60, 20),
+                                        ratatui_image::Resize::Fit(None),
+                                    )
+                                    .ok()
+                            },
+                        );
+                        if let Some(p) = protocol {
+                            event_tx_img.send(Event::ImageInitialized(p)).ok();
+                        }
+                    });
                 }
                 Event::ImageInitialized(protocol) => {
                     app.logo = Some(protocol);
@@ -164,7 +185,9 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         if let Some(model) = app.models.get(app.selected_model_index) {
             spans.push(Span::styled(
                 format!(" {} ", model.name),
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
             ));
         }
     } else if app.current_tab == CurrentTab::Chat {
@@ -172,13 +195,17 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
             if let Some(session) = app.sessions.iter().find(|s| s.0 == *session_id) {
                 spans.push(Span::styled(
                     format!(" {} ", session.1),
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
                 ));
             }
         } else {
             spans.push(Span::styled(
                 " New Chat ",
-                Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
+                Style::default()
+                    .fg(Color::DarkGray)
+                    .add_modifier(Modifier::ITALIC),
             ));
         }
     }
