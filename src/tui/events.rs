@@ -9,4 +9,5 @@ pub enum Event {
     Error(String),
     SessionsFetched(Vec<(String, String, String, String)>),
     MessagesLoaded(Vec<(String, String)>),
+    ModelInfoFetched(crate::api::types::ShowModelResponse),
 }

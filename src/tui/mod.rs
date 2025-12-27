@@ -98,6 +98,9 @@ pub async fn run_app(
                         .map(|(role, content)| crate::app::Message { role, content })
                         .collect();
                 }
+                Event::ModelInfoFetched(info) => {
+                    app.model_info = Some(info);
+                }
                 Event::TokenReceived(token) => {
                     let should_append = if let Some(last) = app.messages.last() {
                         last.role == "assistant"
@@ -164,16 +167,19 @@ fn draw_help_bar(f: &mut Frame, app: &App, area: Rect) {
 
     let keys = match app.current_tab {
         CurrentTab::Models => vec![
-            ("Tab", "Switch View"),
+            ("Ctrl+Tab", "Tab"),
+            ("Tab", "Pane"),
             ("j/k", "Nav"),
             ("Enter", "Chat"),
             ("s", "Sort"),
+            ("i", "Info"),
             ("p", "Pull"),
             ("d", "Delete"),
             ("Ctrl+q", "Quit"),
         ],
         CurrentTab::Chat => vec![
-            ("Tab", "Switch View"),
+            ("Ctrl+Tab", "Tab"),
+            ("Tab", "Pane"),
             ("Enter", "Send/Load"),
             ("Ctrl+Arrows", "Switch Pane"),
             ("d", "Delete Session"),

@@ -18,12 +18,6 @@ impl OllamaClient {
         }
     }
 
-    #[allow(dead_code)]
-    pub async fn check_health(&self) -> Result<bool> {
-        let resp = self.client.get(&self.base_url).send().await?;
-        Ok(resp.status().is_success())
-    }
-
     pub async fn list_models(&self) -> Result<ListModelsResponse> {
         let url = format!("{}/api/tags", self.base_url);
         let resp = self.client.get(&url).send().await?.error_for_status()?;
@@ -31,7 +25,6 @@ impl OllamaClient {
         Ok(models)
     }
 
-    #[allow(dead_code)]
     pub async fn show_model(&self, name: &str) -> Result<ShowModelResponse> {
         let url = format!("{}/api/show", self.base_url);
         let req = ShowModelRequest {
