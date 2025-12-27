@@ -26,3 +26,4 @@ tui-textarea = "0.7.0"
 ratatui-image = "1.0.1"
 image = "0.25.5"
 uuid = { version = "1.19.0", features = ["v4", "fast-rng"] }
+thiserror = "2.0.17"

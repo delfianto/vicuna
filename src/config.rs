@@ -8,6 +8,7 @@ pub struct Config {
     pub _data_dir: PathBuf,
     pub log_dir: PathBuf,
     pub db_path: PathBuf,
+    pub ollama_url: String,
 }
 
 impl Config {
@@ -25,12 +26,15 @@ impl Config {
         std::fs::create_dir_all(&log_dir).context("Failed to create log dir")?;
 
         let db_path = _config_dir.join("vicuna.db");
+        let ollama_url =
+            std::env::var("OLLAMA_HOST").unwrap_or_else(|_| "http://localhost:11434".to_string());
 
         Ok(Self {
             _config_dir,
             _data_dir,
             log_dir,
             db_path,
+            ollama_url,
         })
     }
 }

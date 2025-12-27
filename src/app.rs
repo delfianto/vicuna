@@ -22,12 +22,6 @@ pub enum Action {
     InitImage(u16, u16),
 }
 
-#[derive(Clone, Debug)]
-pub struct Message {
-    pub role: String,
-    pub content: String,
-}
-
 #[derive(PartialEq, Debug)]
 pub enum CurrentTab {
     Models,
@@ -69,11 +63,11 @@ pub struct App {
     pub info_scroll: Cell<u16>,
 
     pub input: tui_textarea::TextArea<'static>,
-    pub messages: Vec<Message>,
+    pub messages: Vec<crate::db::repo::Message>,
     pub is_generating: bool,
     pub toasts: Vec<Toast>,
 
-    pub sessions: Vec<(String, String, String, String)>,
+    pub sessions: Vec<crate::db::repo::Session>,
     pub selected_session_index: usize,
     pub current_session_id: Option<String>,
     pub chat_scroll: u16,
@@ -314,8 +308,8 @@ impl App {
                 }
                 KeyCode::Enter => {
                     if let Some(session) = self.sessions.get(self.selected_session_index) {
-                        let id = session.0.clone();
-                        let model_name = session.2.clone();
+                        let id = session.id.0.clone();
+                        let model_name = session.model.0.clone();
 
                         if let Some(idx) = self.models.iter().position(|m| m.name == model_name) {
                             self.selected_model_index = idx;
@@ -341,14 +335,14 @@ impl App {
                 }
                 KeyCode::Char('d') => {
                     if let Some(session) = self.sessions.get(self.selected_session_index) {
-                        let id = session.0.clone();
+                        let id = session.id.clone();
                         if let Some(current) = &self.current_session_id
-                            && current == &id
+                            && current == &id.0
                         {
                             self.messages.clear();
                             self.current_session_id = None;
                         }
-                        vec![Action::DeleteSession(SessionId(id))]
+                        vec![Action::DeleteSession(id)]
                     } else {
                         vec![]
                     }
@@ -370,7 +364,7 @@ impl App {
                     let text = self.input.lines().join("\n");
                     if !text.trim().is_empty() {
                         let prompt = text.clone();
-                        self.messages.push(Message {
+                        self.messages.push(crate::db::repo::Message {
                             role: "user".into(),
                             content: text,
                         });
@@ -555,6 +549,7 @@ mod tests {
             _data_dir: "/tmp".into(),
             log_dir: "/tmp".into(),
             db_path: "/tmp/test.db".into(),
+            ollama_url: "http://localhost:11434".into(),
         };
         let mut app = App::new(config);
         assert_eq!(app.current_tab, CurrentTab::Models);
@@ -573,6 +568,7 @@ mod tests {
             _data_dir: "/tmp".into(),
             log_dir: "/tmp".into(),
             db_path: "/tmp/test.db".into(),
+            ollama_url: "http://localhost:11434".into(),
         };
         let mut app = App::new(config);
 
@@ -609,6 +605,7 @@ mod tests {
             _data_dir: "/tmp".into(),
             log_dir: "/tmp".into(),
             db_path: "/tmp/test.db".into(),
+            ollama_url: "http://localhost:11434".into(),
         };
         let mut app = App::new(config);
         app.current_tab = CurrentTab::Chat;
@@ -628,6 +625,7 @@ mod tests {
             _data_dir: "/tmp".into(),
             log_dir: "/tmp".into(),
             db_path: "/tmp/test.db".into(),
+            ollama_url: "http://localhost:11434".into(),
         };
         let mut app = App::new(config);
         assert!(!app.should_quit);
@@ -643,6 +641,7 @@ mod tests {
             _data_dir: "/tmp".into(),
             log_dir: "/tmp".into(),
             db_path: "/tmp/test.db".into(),
+            ollama_url: "http://localhost:11434".into(),
         };
         let mut app = App::new(config);
 

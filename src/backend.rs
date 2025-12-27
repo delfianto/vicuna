@@ -7,13 +7,13 @@ use crate::tui::events::Event;
 use anyhow::Result;
 use futures::StreamExt;
 use std::sync::Arc;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{Receiver, Sender};
 
 pub struct Backend {
     client: OllamaClient,
     repo: Arc<Repository>,
-    action_rx: UnboundedReceiver<Action>,
-    event_tx: UnboundedSender<Event>,
+    action_rx: Receiver<Action>,
+    event_tx: Sender<Event>,
     generation_task: Option<tokio::task::AbortHandle>,
 }
 
@@ -21,8 +21,8 @@ impl Backend {
     pub fn new(
         client: OllamaClient,
         repo: Arc<Repository>,
-        action_rx: UnboundedReceiver<Action>,
-        event_tx: UnboundedSender<Event>,
+        action_rx: Receiver<Action>,
+        event_tx: Sender<Event>,
     ) -> Self {
         Self {
             client,
@@ -73,9 +73,12 @@ impl Backend {
 
             let fixed = img.resize_exact(w as u32, h as u32, image::imageops::FilterType::Lanczos3);
 
-            if let Err(e) = event_tx.send(Event::ImageLoaded(fixed)) {
-                tracing::error!("Failed to send image event: {}", e);
-            }
+            let rt = tokio::runtime::Handle::current();
+            rt.block_on(async {
+                if let Err(e) = event_tx.send(Event::ImageLoaded(fixed)).await {
+                    tracing::error!("Failed to send image event: {}", e);
+                }
+            });
         });
     }
 
@@ -92,10 +95,11 @@ impl Backend {
                             tracing::error!("DB Upsert failed for model {}: {}", model.name, e);
                         }
                     }
-                    tx.send(Event::ModelsFetched(res.models)).ok();
+                    tx.send(Event::ModelsFetched(res.models)).await.ok();
                 }
                 Err(e) => {
                     tx.send(Event::Error(format!("Fetch models failed: {}", e)))
+                        .await
                         .ok();
                 }
             }
@@ -109,10 +113,11 @@ impl Backend {
         tokio::spawn(async move {
             match client.show_model(&name.0).await {
                 Ok(res) => {
-                    tx.send(Event::ModelInfoFetched(res)).ok();
+                    tx.send(Event::ModelInfoFetched(res)).await.ok();
                 }
                 Err(e) => {
                     tx.send(Event::Error(format!("Fetch model info failed: {}", e)))
+                        .await
                         .ok();
                 }
             }
@@ -127,11 +132,11 @@ impl Backend {
         tokio::spawn(async move {
             match client.delete_model(&name.0).await {
                 Ok(true) => {
-                    if let Err(e) = crate::db::repo::delete_model_cascade(&repo.conn, &name.0).await
-                    {
+                    if let Err(e) = crate::db::repo::delete_model_cascade(&repo.conn, &name).await {
                         tracing::error!("DB Cascade delete failed: {}", e);
                     }
                     tx.send(Event::Error(format!("Model {} deleted", name.0)))
+                        .await
                         .ok();
                 }
                 Ok(false) => {
@@ -139,10 +144,13 @@ impl Backend {
                         "Model {} not found or not deleted",
                         name.0
                     )))
+                    .await
                     .ok();
                 }
                 Err(e) => {
-                    tx.send(Event::Error(format!("Delete failed: {}", e))).ok();
+                    tx.send(Event::Error(format!("Delete failed: {}", e)))
+                        .await
+                        .ok();
                 }
             }
         });
@@ -166,6 +174,7 @@ impl Backend {
                     }
                     Err(e) => {
                         tx.send(Event::Error(format!("Pull error for {}: {}", name.0, e)))
+                            .await
                             .ok();
                         return;
                     }
@@ -175,6 +184,7 @@ impl Backend {
                 "Model {} pulled successfully",
                 name.0
             )))
+            .await
             .ok();
         });
     }
@@ -199,15 +209,16 @@ impl Backend {
             while let Some(res) = stream.next().await {
                 match res {
                     Ok(resp) => {
-                        tx.send(Event::TokenReceived(resp.response)).ok();
+                        tx.send(Event::TokenReceived(resp.response)).await.ok();
                         if resp.done {
-                            tx.send(Event::GenerationDone).ok();
+                            tx.send(Event::GenerationDone).await.ok();
                         }
                     }
                     Err(e) => {
                         tx.send(Event::Error(format!("Generation error: {}", e)))
+                            .await
                             .ok();
-                        tx.send(Event::GenerationDone).ok();
+                        tx.send(Event::GenerationDone).await.ok();
                     }
                 }
             }
@@ -223,10 +234,11 @@ impl Backend {
         tokio::spawn(async move {
             match crate::db::repo::get_sessions(&repo.conn).await {
                 Ok(sessions) => {
-                    tx.send(Event::SessionsFetched(sessions)).ok();
+                    tx.send(Event::SessionsFetched(sessions)).await.ok();
                 }
                 Err(e) => {
                     tx.send(Event::Error(format!("Fetch sessions failed: {}", e)))
+                        .await
                         .ok();
                 }
             }
@@ -238,12 +250,13 @@ impl Backend {
         let tx = self.event_tx.clone();
 
         tokio::spawn(async move {
-            match crate::db::repo::get_messages(&repo.conn, &id.0).await {
+            match crate::db::repo::get_messages(&repo.conn, &id).await {
                 Ok(messages) => {
-                    tx.send(Event::MessagesLoaded(messages)).ok();
+                    tx.send(Event::MessagesLoaded(messages)).await.ok();
                 }
                 Err(e) => {
                     tx.send(Event::Error(format!("Load messages failed: {}", e)))
+                        .await
                         .ok();
                 }
             }
@@ -255,10 +268,9 @@ impl Backend {
         let tx = self.event_tx.clone();
 
         tokio::spawn(async move {
-            if let Err(e) =
-                crate::db::repo::create_session(&repo.conn, &id.0, &title, &model.0).await
-            {
+            if let Err(e) = crate::db::repo::create_session(&repo.conn, &id, &title, &model).await {
                 tx.send(Event::Error(format!("Create session failed: {}", e)))
+                    .await
                     .ok();
             }
         });
@@ -269,8 +281,9 @@ impl Backend {
         let tx = self.event_tx.clone();
 
         tokio::spawn(async move {
-            if let Err(e) = crate::db::repo::delete_session(&repo.conn, &id.0).await {
+            if let Err(e) = crate::db::repo::delete_session(&repo.conn, &id).await {
                 tx.send(Event::Error(format!("Delete session failed: {}", e)))
+                    .await
                     .ok();
             }
         });
@@ -280,7 +293,7 @@ impl Backend {
         let repo = self.repo.clone();
 
         tokio::spawn(async move {
-            if let Err(e) = crate::db::repo::add_message(&repo.conn, &id.0, &role, &content).await {
+            if let Err(e) = crate::db::repo::add_message(&repo.conn, &id, &role, &content).await {
                 tracing::error!("Failed to save message: {}", e);
             }
         });

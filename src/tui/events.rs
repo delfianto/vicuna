@@ -1,12 +1,13 @@
 use crate::api::types::{Model, ShowModelResponse};
+use crate::db::repo::{Message, Session};
 use crossterm::event::KeyEvent;
 
 pub enum Event {
     Input(KeyEvent),
     Tick,
     ModelsFetched(Vec<Model>),
-    SessionsFetched(Vec<(String, String, String, String)>),
-    MessagesLoaded(Vec<(String, String)>),
+    SessionsFetched(Vec<Session>),
+    MessagesLoaded(Vec<Message>),
     ModelInfoFetched(ShowModelResponse),
     TokenReceived(String),
     GenerationDone,

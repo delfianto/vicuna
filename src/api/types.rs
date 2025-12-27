@@ -64,7 +64,7 @@ pub struct GenerateRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub template: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub context: Option<Vec<u64>>,
+    pub context: Option<Vec<i32>>,
     pub stream: Option<bool>,
 }
 

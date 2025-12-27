@@ -42,12 +42,12 @@ pub fn restore() -> Result<()> {
 pub async fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     mut app: App,
-    mut event_rx: mpsc::UnboundedReceiver<Event>,
-    event_tx: mpsc::UnboundedSender<Event>,
-    action_tx: mpsc::UnboundedSender<Action>,
+    mut event_rx: mpsc::Receiver<Event>,
+    event_tx: mpsc::Sender<Event>,
+    action_tx: mpsc::Sender<Action>,
 ) -> Result<()> {
-    let _ = action_tx.send(Action::FetchModels);
-    let _ = action_tx.send(Action::InitImage(60, 20));
+    let _ = action_tx.send(Action::FetchModels).await;
+    let _ = action_tx.send(Action::InitImage(60, 20)).await;
 
     loop {
         terminal.draw(|f| {
@@ -86,7 +86,7 @@ pub async fn run_app(
                 Event::Input(key) => {
                     let actions = app.on_key(key);
                     for action in actions {
-                        let _ = action_tx.send(action.clone());
+                        let _ = action_tx.send(action.clone()).await;
                         if let Action::Quit = action {
                             return Ok(());
                         }
@@ -101,10 +101,7 @@ pub async fn run_app(
                     app.sessions = sessions;
                 }
                 Event::MessagesLoaded(messages) => {
-                    app.messages = messages
-                        .into_iter()
-                        .map(|(role, content)| crate::app::Message { role, content })
-                        .collect();
+                    app.messages = messages;
                 }
                 Event::ModelInfoFetched(info) => {
                     app.model_info = Some(info);
@@ -121,7 +118,7 @@ pub async fn run_app(
                             last.content.push_str(&token);
                         }
                     } else {
-                        app.messages.push(crate::app::Message {
+                        app.messages.push(crate::db::repo::Message {
                             role: "assistant".into(),
                             content: token,
                         });
@@ -133,11 +130,13 @@ pub async fn run_app(
                         && last_msg.role == "assistant"
                         && let Some(session_id) = &app.current_session_id
                     {
-                        let _ = action_tx.send(Action::SaveMessage(
-                            crate::api::types::SessionId(session_id.clone()),
-                            "assistant".to_string(),
-                            last_msg.content.clone(),
-                        ));
+                        let _ = action_tx
+                            .send(Action::SaveMessage(
+                                crate::api::types::SessionId(session_id.clone()),
+                                "assistant".to_string(),
+                                last_msg.content.clone(),
+                            ))
+                            .await;
                     }
                 }
                 Event::Error(msg) => {
@@ -159,7 +158,10 @@ pub async fn run_app(
                             },
                         );
                         if let Some(p) = protocol {
-                            event_tx_img.send(Event::ImageInitialized(p)).ok();
+                            let rt = tokio::runtime::Handle::current();
+                            rt.block_on(async {
+                                event_tx_img.send(Event::ImageInitialized(p)).await.ok();
+                            });
                         }
                     });
                 }
@@ -192,9 +194,9 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         }
     } else if app.current_tab == CurrentTab::Chat {
         if let Some(session_id) = &app.current_session_id {
-            if let Some(session) = app.sessions.iter().find(|s| s.0 == *session_id) {
+            if let Some(session) = app.sessions.iter().find(|s| s.id.0 == *session_id) {
                 spans.push(Span::styled(
-                    format!(" {} ", session.1),
+                    format!(" {} ", session.title),
                     Style::default()
                         .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD),
