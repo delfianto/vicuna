@@ -4,9 +4,9 @@
 
 # Vicuna
 
-</div>
-
 **Vicuna** is a minimalist terminal-based client for [Ollama](https://ollama.com/), built in **Rust**.
+
+</div>
 
 ## Features
 
