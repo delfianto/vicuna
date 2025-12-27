@@ -8,9 +8,15 @@
 
 </div>
 
+> ⚠️ **Important, Extremely Serious Disclaimer™**
+>
+> - This app does not come with _any_ warranty. If your GPU melts because you tried to run a 320B model on a toaster, that’s between you and your toaster.
+> - This project was coded with a frankly irresponsible amount of AI assistance. Call it vibecode, smutcode, AI slop, AI gruel — I genuinely do not care.
+> - This is an app for shits and giggles. If that fact causes you emotional distress, please close this tab, touch some grass, and re-evaluate your life choices.
+
 ## Features
 
-- **🚀 Should be Fast:** Built with Rust and `ratatui`.
+- **🚀 Lightweight (kinda):** Built with Rust and `ratatui`.
 - **💾 Local Database:** SQLite backend (via LibSQL) stores sessions and message history.
 - **🤖 Model Management:** View, pull, inspect, and delete models directly from the TUI.
 - **📝 Markdown Support:** Rich rendering of assistant responses including code blocks and formatting.
