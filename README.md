@@ -1,10 +1,10 @@
 <div align="center">
 
-[<img src="asset/vicuna-logo.png" width="400" alt="Vicuna Logo" />](https://github.com/delfianto/vicuna)
-
 # Vicuna
 
 **Vicuna** is a minimalist terminal-based client for [Ollama](https://ollama.com/), built in **Rust**.
+
+[<img src="asset/vicuna-logo.png" width="400" alt="Vicuna Logo" />](https://github.com/delfianto/vicuna)
 
 </div>
 
