@@ -1,7 +1,7 @@
 use crate::api::types::{Model, ModelName, SessionId};
 use crate::utils::vram;
 use anyhow::Result;
-use libsql::{Connection, params};
+use libsql::{named_params, Connection};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,17 +33,22 @@ impl Repository {
 
 pub async fn upsert_model(conn: &Connection, model: &Model) -> Result<()> {
     let details = model.details.as_ref();
-    let family = details.map(|d| d.family.as_str());
-    let param_size = details.map(|d| d.parameter_size.as_str());
-    let quant = details.map(|d| d.quantization_level.as_str());
 
-    let p_val = vram::parse_model_params(param_size.unwrap_or_default());
-    let q_val = vram::parse_quantization(quant.unwrap_or_default());
-    let vram_usage = vram::estimate_vram_usage(p_val, q_val) as i64;
+    let family = details.map(|d| d.family.clone());
+    let param_size = details.map(|d| d.parameter_size.clone());
+    let quant = details.map(|d| d.quantization_level.clone());
+
+    let vram_usage = if let (Some(p), Some(q)) = (&param_size, &quant) {
+        let p_val = vram::parse_model_params(p);
+        let q_val = vram::parse_quantization(q);
+        vram::estimate_vram_usage(p_val, q_val) as i64
+    } else {
+        0
+    };
 
     conn.execute(
         "INSERT INTO models (name, family, size, quantization, params, modified_at, vram_usage)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         VALUES (:name, :family, :size, :quant, :params, :mod_at, :vram)
          ON CONFLICT(name) DO UPDATE SET
             family=excluded.family,
             size=excluded.size,
@@ -52,15 +57,15 @@ pub async fn upsert_model(conn: &Connection, model: &Model) -> Result<()> {
             modified_at=excluded.modified_at,
             vram_usage=excluded.vram_usage
         ",
-        params![
-            model.name.clone(),
-            family,
-            model.size.to_string(),
-            quant,
-            param_size,
-            model.modified_at.clone(),
-            vram_usage
-        ],
+        libsql::named_params! {
+            ":name": model.name.clone(),
+            ":family": family,
+            ":size": model.size as i64,
+            ":quant": quant,
+            ":params": param_size,
+            ":mod_at": model.modified_at.clone(),
+            ":vram": vram_usage
+        },
     )
     .await?;
 
@@ -74,19 +79,18 @@ pub async fn create_session(
     model: &ModelName,
 ) -> Result<()> {
     conn.execute(
-        "INSERT INTO sessions (id, title, model, created_at) VALUES (?1, ?2, ?3, datetime('now'))",
-        params![id.0.clone(), title, model.0.clone()],
+        "INSERT INTO sessions (id, title, model, created_at) VALUES (:id, :title, :model, datetime('now'))",
+        named_params! {
+            ":id": id.0.clone(),
+            ":title": title,
+            ":model": model.0.clone()
+        },
     )
     .await?;
     Ok(())
 }
 
 pub async fn get_sessions(conn: &Connection) -> Result<Vec<Session>> {
-    const COL_ID: i32 = 0;
-    const COL_TITLE: i32 = 1;
-    const COL_MODEL: i32 = 2;
-    const COL_CREATED_AT: i32 = 3;
-
     let mut rows = conn
         .query(
             "SELECT id, title, model, created_at FROM sessions ORDER BY created_at DESC",
@@ -96,13 +100,13 @@ pub async fn get_sessions(conn: &Connection) -> Result<Vec<Session>> {
     let mut sessions = Vec::new();
     while let Some(row) = rows.next().await? {
         sessions.push(Session {
-            id: SessionId(row.get(COL_ID)?),
-            title: row.get(COL_TITLE)?,
+            id: SessionId(row.get(0)?),
+            title: row.get(1)?,
             model: ModelName(
-                row.get::<Option<String>>(COL_MODEL)?
+                row.get::<Option<String>>(2)?
                     .unwrap_or_else(|| "unknown".into()),
             ),
-            created_at: row.get(COL_CREATED_AT)?,
+            created_at: row.get(3)?,
         });
     }
     Ok(sessions)
@@ -110,21 +114,24 @@ pub async fn get_sessions(conn: &Connection) -> Result<Vec<Session>> {
 
 pub async fn delete_model_cascade(conn: &Connection, name: &ModelName) -> Result<()> {
     conn.execute(
-        "DELETE FROM sessions WHERE model = ?1",
-        params![name.0.clone()],
+        "DELETE FROM sessions WHERE model = :name",
+        named_params! { ":name": name.0.clone() },
     )
     .await?;
     conn.execute(
-        "DELETE FROM models WHERE name = ?1",
-        params![name.0.clone()],
+        "DELETE FROM models WHERE name = :name",
+        named_params! { ":name": name.0.clone() },
     )
     .await?;
     Ok(())
 }
 
 pub async fn delete_session(conn: &Connection, id: &SessionId) -> Result<()> {
-    conn.execute("DELETE FROM sessions WHERE id = ?1", params![id.0.clone()])
-        .await?;
+    conn.execute(
+        "DELETE FROM sessions WHERE id = :id",
+        named_params! { ":id": id.0.clone() },
+    )
+    .await?;
     Ok(())
 }
 
@@ -135,28 +142,29 @@ pub async fn add_message(
     content: &str,
 ) -> Result<()> {
     conn.execute(
-        "INSERT INTO messages (session_id, role, content, created_at) VALUES (?1, ?2, ?3, datetime('now'))",
-        params![session_id.0.clone(), role, content]
+        "INSERT INTO messages (session_id, role, content, created_at) VALUES (:sid, :role, :content, datetime('now'))",
+        named_params! {
+            ":sid": session_id.0.clone(),
+            ":role": role,
+            ":content": content
+        }
     ).await?;
     Ok(())
 }
 
 pub async fn get_messages(conn: &Connection, session_id: &SessionId) -> Result<Vec<Message>> {
-    const COL_ROLE: i32 = 0;
-    const COL_CONTENT: i32 = 1;
-
     let mut rows = conn
         .query(
-            "SELECT role, content FROM messages WHERE session_id = ?1 ORDER BY id ASC",
-            params![session_id.0.clone()],
+            "SELECT role, content FROM messages WHERE session_id = :sid ORDER BY id ASC",
+            named_params! { ":sid": session_id.0.clone() },
         )
         .await?;
 
     let mut messages = Vec::new();
     while let Some(row) = rows.next().await? {
         messages.push(Message {
-            role: row.get(COL_ROLE)?,
-            content: row.get(COL_CONTENT)?,
+            role: row.get(0)?,
+            content: row.get(1)?,
         });
     }
     Ok(messages)

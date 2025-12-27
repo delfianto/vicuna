@@ -1,25 +1,13 @@
+use crate::api::error::ApiError;
 use crate::api::types::*;
 use async_stream::try_stream;
 use futures::stream::{Stream, StreamExt};
 use reqwest::Client;
 use std::sync::Arc;
-use thiserror::Error;
 use tokio_util::codec::{FramedRead, LinesCodec};
 use tokio_util::io::StreamReader;
 
-#[derive(Error, Debug)]
-pub enum OllamaError {
-    #[error("Network error: {0}")]
-    Network(#[from] reqwest::Error),
-    #[error("JSON error: {0}")]
-    Json(#[from] serde_json::Error),
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
-    #[error("Codec error: {0}")]
-    Codec(#[from] tokio_util::codec::LinesCodecError),
-}
-
-pub type Result<T> = std::result::Result<T, OllamaError>;
+pub type Result<T> = std::result::Result<T, ApiError>;
 
 #[derive(Clone)]
 pub struct OllamaClient {

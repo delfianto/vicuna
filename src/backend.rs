@@ -90,11 +90,23 @@ impl Backend {
         tokio::spawn(async move {
             match client.list_models().await {
                 Ok(res) => {
+                    let mut sync_errors = Vec::new();
                     for model in &res.models {
                         if let Err(e) = crate::db::repo::upsert_model(&repo.conn, model).await {
                             tracing::error!("DB Upsert failed for model {}: {}", model.name, e);
+                            sync_errors.push(model.name.clone());
                         }
                     }
+
+                    if !sync_errors.is_empty() {
+                        tx.send(Event::Error(format!(
+                            "Fetched models, but failed to cache {}: DB Sync Error",
+                            sync_errors.len()
+                        )))
+                        .await
+                        .ok();
+                    }
+
                     tx.send(Event::ModelsFetched(res.models)).await.ok();
                 }
                 Err(e) => {
