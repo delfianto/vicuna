@@ -1,7 +1,7 @@
 use crate::api::types::Model;
 use crate::utils::vram;
 use anyhow::Result;
-use libsql::{params, Connection};
+use libsql::{Connection, params};
 
 pub async fn upsert_model(conn: &Connection, model: &Model) -> Result<()> {
     let family = model

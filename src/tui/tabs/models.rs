@@ -4,10 +4,10 @@ use crate::tui::styles;
 use crate::utils::vram;
 use chrono::DateTime;
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     widgets::{Block, BorderType, Borders, Cell, Paragraph, Row, Table, TableState, Wrap},
-    Frame,
 };
 
 pub fn draw(f: &mut Frame, app: &App, area: Rect) {
@@ -115,7 +115,7 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
         constraints.push(Constraint::Percentage(20));
     }
 
-    let (border_style, border_type) = if app.models_focus == ModelsFocus::List {
+    let (border_style, border_type) = if !app.show_info || app.models_focus == ModelsFocus::List {
         (
             Style::default()
                 .fg(Color::LightYellow)
@@ -183,7 +183,7 @@ fn draw_info_pane(f: &mut Frame, app: &App, area: Rect) {
         }
 
         let inner_area = block.inner(area);
-        
+
         // Simple height estimation for clamping (wrapped lines)
         let mut visual_lines = 0;
         for line in details.lines() {
@@ -196,7 +196,8 @@ fn draw_info_pane(f: &mut Frame, app: &App, area: Rect) {
         }
 
         let max_scroll = visual_lines.saturating_sub(inner_area.height);
-        let scroll = app.info_scroll.min(max_scroll);
+        let scroll = app.info_scroll.get().min(max_scroll);
+        app.info_scroll.set(scroll);
 
         let p = Paragraph::new(details)
             .block(block)
@@ -207,14 +208,17 @@ fn draw_info_pane(f: &mut Frame, app: &App, area: Rect) {
 
         // Render scrollbar
         if visual_lines > inner_area.height {
-            let scrollbar = ratatui::widgets::Scrollbar::new(ratatui::widgets::ScrollbarOrientation::VerticalRight)
-                .symbols(ratatui::symbols::scrollbar::VERTICAL)
-                .begin_symbol(Some("▲"))
-                .end_symbol(Some("▼"));
-            
-            let mut scrollbar_state = ratatui::widgets::ScrollbarState::new(usize::from(visual_lines))
-                .position(usize::from(scroll));
-            
+            let scrollbar = ratatui::widgets::Scrollbar::new(
+                ratatui::widgets::ScrollbarOrientation::VerticalRight,
+            )
+            .symbols(ratatui::symbols::scrollbar::VERTICAL)
+            .begin_symbol(Some("▲"))
+            .end_symbol(Some("▼"));
+
+            let mut scrollbar_state =
+                ratatui::widgets::ScrollbarState::new(usize::from(visual_lines))
+                    .position(usize::from(scroll));
+
             f.render_stateful_widget(scrollbar, area, &mut scrollbar_state);
         }
     } else {

@@ -3,6 +3,7 @@ use crate::config::Config;
 use crate::tui::components::popup::Popup;
 use crate::tui::components::toast::Toast;
 use crossterm::event::{KeyCode, KeyEvent};
+use std::cell::Cell;
 use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -64,7 +65,7 @@ pub struct App {
 
     pub show_info: bool,
     pub model_info: Option<crate::api::types::ShowModelResponse>,
-    pub info_scroll: u16,
+    pub info_scroll: Cell<u16>,
 
     pub input: tui_textarea::TextArea<'static>,
     pub messages: Vec<Message>,
@@ -104,7 +105,7 @@ impl App {
             sort_column: SortColumn::Name,
             show_info: false,
             model_info: None,
-            info_scroll: 0,
+            info_scroll: Cell::new(0),
             input,
             messages: Vec::new(),
             is_generating: false,
@@ -181,7 +182,11 @@ impl App {
                 }
                 CurrentTab::Chat => self.on_key_chat(key),
             },
-            KeyCode::Tab if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
+            KeyCode::Tab
+                if key
+                    .modifiers
+                    .contains(crossterm::event::KeyModifiers::CONTROL) =>
+            {
                 self.current_tab = match self.current_tab {
                     CurrentTab::Models => CurrentTab::Chat,
                     CurrentTab::Chat => CurrentTab::Models,
@@ -423,19 +428,23 @@ impl App {
                     return vec![];
                 }
                 KeyCode::PageUp => {
-                    self.info_scroll = self.info_scroll.saturating_sub(15);
+                    self.info_scroll
+                        .set(self.info_scroll.get().saturating_sub(15));
                     return vec![];
                 }
                 KeyCode::PageDown => {
-                    self.info_scroll = self.info_scroll.saturating_add(15);
+                    self.info_scroll
+                        .set(self.info_scroll.get().saturating_add(15));
                     return vec![];
                 }
                 KeyCode::Up if self.models_focus == ModelsFocus::Info => {
-                    self.info_scroll = self.info_scroll.saturating_sub(3);
+                    self.info_scroll
+                        .set(self.info_scroll.get().saturating_sub(3));
                     return vec![];
                 }
                 KeyCode::Down if self.models_focus == ModelsFocus::Info => {
-                    self.info_scroll = self.info_scroll.saturating_add(3);
+                    self.info_scroll
+                        .set(self.info_scroll.get().saturating_add(3));
                     return vec![];
                 }
                 _ => {}
@@ -479,7 +488,7 @@ impl App {
             KeyCode::Char('i') => {
                 if let Some(model) = self.models.get(self.selected_model_index) {
                     self.show_info = true;
-                    self.info_scroll = 0;
+                    self.info_scroll.set(0);
                     self.models_focus = ModelsFocus::Info;
                     vec![Action::ShowModelInfo(model.name.clone())]
                 } else {
@@ -500,6 +509,7 @@ impl App {
                 self.messages.clear();
                 self.current_session_id = None;
                 self.chat_scroll = 0;
+                self.models_focus = ModelsFocus::List;
                 vec![]
             }
             _ => vec![],
@@ -557,7 +567,7 @@ mod tests {
             db_path: "/tmp/test.db".into(),
         };
         let mut app = App::new(config);
-        
+
         // Models Tab (no info)
         app.current_tab = CurrentTab::Models;
         app.show_info = false;
@@ -570,6 +580,13 @@ mod tests {
         app.on_key(mock_key(KeyCode::Tab));
         assert_eq!(app.models_focus, ModelsFocus::Info);
         app.on_key(mock_key(KeyCode::Tab));
+        assert_eq!(app.models_focus, ModelsFocus::List);
+
+        // Models Tab Enter Reset
+        app.show_info = true;
+        app.models_focus = ModelsFocus::Info;
+        app.on_key(mock_key(KeyCode::Enter));
+        assert_eq!(app.current_tab, CurrentTab::Chat);
         assert_eq!(app.models_focus, ModelsFocus::List);
 
         // Chat Tab
