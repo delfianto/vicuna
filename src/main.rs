@@ -20,7 +20,7 @@ async fn main() -> Result<()> {
     let _guard = logging::init(&config.log_dir)?;
     tracing::info!("Vicuna starting up...");
 
-    let _conn = db::init(&config.db_path).await?;
+    let conn = db::init(&config.db_path).await?;
     tracing::info!("Database initialized at {:?}", config.db_path);
 
     let mut terminal = tui::init()?;
@@ -52,12 +52,21 @@ async fn main() -> Result<()> {
     let event_tx_backend = event_tx.clone();
     let action_tx_backend = action_tx.clone();
     let client = api::client::OllamaClient::new("http://localhost:11434".to_string());
+    
+    let db_conn = std::sync::Arc::new(conn);
 
     tokio::spawn(async move {
         while let Some(action) = action_rx.recv().await {
             match action {
                 Action::FetchModels => match client.list_models().await {
                     Ok(resp) => {
+                        // Cache models in DB
+                        for model in &resp.models {
+                            if let Err(e) = db::repo::upsert_model(&db_conn, model).await {
+                                tracing::error!("Failed to upsert model {}: {:?}", model.name, e);
+                            }
+                        }
+                        
                         event_tx_backend
                             .send(Event::ModelsFetched(resp.models))
                             .ok();
@@ -74,7 +83,12 @@ async fn main() -> Result<()> {
                 }
                 Action::DeleteModel(name) => match client.delete_model(&name).await {
                     Ok(_) => {
+                        // Cascade delete from DB
+                        if let Err(e) = db::repo::delete_model_cascade(&db_conn, &name).await {
+                             tracing::error!("Failed to delete model from DB: {:?}", e);
+                        }
                         action_tx_backend.send(Action::FetchModels).ok();
+                        action_tx_backend.send(Action::FetchSessions).ok();
                     }
                     Err(e) => {
                         tracing::error!("Failed to delete model: {:?}", e);
@@ -83,6 +97,80 @@ async fn main() -> Result<()> {
                 },
                 Action::PullModel(name) => {
                     tracing::info!("Pulling model {}", name);
+                    let req = api::types::PullRequest {
+                        name: name.clone(),
+                        stream: Some(true),
+                    };
+                    
+                    let stream = client.pull_model_stream(req);
+                    let event_tx_pull = event_tx_backend.clone();
+                    let action_tx_pull = action_tx_backend.clone();
+                    
+                    // Fire and forget pull task
+                    tokio::spawn(async move {
+                        let mut stream = Box::pin(stream);
+                        while let Some(res) = stream.next().await {
+                            match res {
+                                Ok(resp) => {
+                                    if let Some(status) = Option::from(resp.status) {
+                                         tracing::debug!("Pull status: {}", status);
+                                    }
+                                }
+                                Err(e) => {
+                                    tracing::error!("Pull error: {:?}", e);
+                                    event_tx_pull.send(Event::Error(format!("Pull failed: {}", e))).ok();
+                                    return;
+                                }
+                            }
+                        }
+                        // Done
+                         action_tx_pull.send(Action::FetchModels).ok();
+                         event_tx_pull.send(Event::Error("Model pulled successfully".to_string())).ok(); 
+                    });
+                }
+                Action::FetchSessions => {
+                    match db::repo::get_sessions(&db_conn).await {
+                        Ok(sessions) => {
+                             event_tx_backend.send(Event::SessionsFetched(sessions)).ok();
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to fetch sessions: {:?}", e);
+                            event_tx_backend.send(Event::Error(format!("Failed to fetch sessions: {}", e))).ok();
+                        }
+                    }
+                }
+                Action::CreateSession(id, title, model) => {
+                    if let Err(e) = db::repo::create_session(&db_conn, &id, &title, &model).await {
+                        tracing::error!("Failed to create session: {:?}", e);
+                        event_tx_backend.send(Event::Error(format!("Failed to create session: {}", e))).ok();
+                    } else {
+                        // Refresh session list
+                        action_tx_backend.send(Action::FetchSessions).ok();
+                    }
+                }
+                Action::LoadSession(id) => {
+                     match db::repo::get_messages(&db_conn, &id).await {
+                        Ok(messages) => {
+                             event_tx_backend.send(Event::MessagesLoaded(messages)).ok();
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to load messages: {:?}", e);
+                            event_tx_backend.send(Event::Error(format!("Failed to load messages: {}", e))).ok();
+                        }
+                     }
+                }
+                Action::DeleteSession(id) => {
+                    if let Err(e) = db::repo::delete_session(&db_conn, &id).await {
+                        tracing::error!("Failed to delete session: {:?}", e);
+                        event_tx_backend.send(Event::Error(format!("Failed to delete session: {}", e))).ok();
+                    } else {
+                        action_tx_backend.send(Action::FetchSessions).ok();
+                    }
+                }
+                Action::SaveMessage(session_id, role, content) => {
+                    if let Err(e) = db::repo::add_message(&db_conn, &session_id, &role, &content).await {
+                        tracing::error!("Failed to save message: {:?}", e);
+                    }
                 }
                 Action::Generate(prompt, model) => {
                     let req = api::types::GenerateRequest {
@@ -123,6 +211,9 @@ async fn main() -> Result<()> {
     });
 
     let app = App::new(config.clone());
+    // Initial fetch
+    action_tx.send(Action::FetchModels)?;
+    action_tx.send(Action::FetchSessions)?;
 
     let res = tui::run_app(&mut terminal, app, event_rx, action_tx).await;
 
