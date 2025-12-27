@@ -1,4 +1,4 @@
-use crate::api::types::Model;
+use crate::api::types::{Model, ModelName, SessionId};
 use crate::config::Config;
 use crate::tui::components::popup::Popup;
 use crate::tui::components::toast::Toast;
@@ -10,15 +10,15 @@ use uuid::Uuid;
 pub enum Action {
     FetchModels,
     Quit,
-    DeleteModel(String),
-    PullModel(String),
-    ShowModelInfo(String),
-    Generate(String, String),
+    DeleteModel(ModelName),
+    PullModel(ModelName),
+    ShowModelInfo(ModelName),
+    Generate(String, ModelName),
     FetchSessions,
-    LoadSession(String),
-    DeleteSession(String),
-    CreateSession(String, String, String),
-    SaveMessage(String, String, String),
+    LoadSession(SessionId),
+    DeleteSession(SessionId),
+    CreateSession(SessionId, String, ModelName),
+    SaveMessage(SessionId, String, String),
     InitImage(u16, u16),
 }
 
@@ -243,7 +243,7 @@ impl App {
                             .borders(ratatui::widgets::Borders::ALL)
                             .title("Input"),
                     );
-                    vec![Action::PullModel(model_name)]
+                    vec![Action::PullModel(ModelName(model_name))]
                 } else {
                     vec![]
                 }
@@ -323,7 +323,7 @@ impl App {
 
                         self.current_session_id = Some(id.clone());
                         self.chat_focus = ChatFocus::Input;
-                        vec![Action::LoadSession(id)]
+                        vec![Action::LoadSession(SessionId(id))]
                     } else {
                         vec![]
                     }
@@ -348,7 +348,7 @@ impl App {
                             self.messages.clear();
                             self.current_session_id = None;
                         }
-                        vec![Action::DeleteSession(id)]
+                        vec![Action::DeleteSession(SessionId(id))]
                     } else {
                         vec![]
                     }
@@ -400,20 +400,20 @@ impl App {
                             let title = prompt.chars().take(20).collect::<String>();
                             self.current_session_id = Some(new_id.clone());
                             actions.push(Action::CreateSession(
-                                new_id.clone(),
+                                SessionId(new_id.clone()),
                                 title,
-                                model_name.clone(),
+                                ModelName(model_name.clone()),
                             ));
                             new_id
                         };
 
                         actions.push(Action::SaveMessage(
-                            session_id,
+                            SessionId(session_id),
                             "user".to_string(),
                             prompt.clone(),
                         ));
 
-                        actions.push(Action::Generate(prompt, model_name));
+                        actions.push(Action::Generate(prompt, ModelName(model_name)));
 
                         return actions;
                     }
@@ -466,7 +466,7 @@ impl App {
                     if self.show_info
                         && let Some(model) = self.models.get(self.selected_model_index)
                     {
-                        return vec![Action::ShowModelInfo(model.name.clone())];
+                        return vec![Action::ShowModelInfo(ModelName(model.name.clone()))];
                     }
                 }
                 vec![]
@@ -477,14 +477,14 @@ impl App {
                     if self.show_info
                         && let Some(model) = self.models.get(self.selected_model_index)
                     {
-                        return vec![Action::ShowModelInfo(model.name.clone())];
+                        return vec![Action::ShowModelInfo(ModelName(model.name.clone()))];
                     }
                 }
                 vec![]
             }
             KeyCode::Char('d') => {
                 if let Some(model) = self.models.get(self.selected_model_index) {
-                    vec![Action::DeleteModel(model.name.clone())]
+                    vec![Action::DeleteModel(ModelName(model.name.clone()))]
                 } else {
                     vec![]
                 }
@@ -498,7 +498,7 @@ impl App {
                     self.show_info = true;
                     self.info_scroll.set(0);
                     self.models_focus = ModelsFocus::Info;
-                    vec![Action::ShowModelInfo(model.name.clone())]
+                    vec![Action::ShowModelInfo(ModelName(model.name.clone()))]
                 } else {
                     vec![]
                 }
