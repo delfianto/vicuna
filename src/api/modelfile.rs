@@ -1,4 +1,3 @@
-/// Parses a parameter size string (e.g., "7B", "70B") into a raw number of parameters.
 pub fn parse_parameter_size(size_str: &str) -> Option<u64> {
     let s = size_str.trim().to_uppercase();
     if let Some(idx) = s.find('B') {
@@ -10,18 +9,15 @@ pub fn parse_parameter_size(size_str: &str) -> Option<u64> {
     if let Some(idx) = s.find('M') {
         let num_part = &s[..idx];
         if let Ok(val) = num_part.parse::<f64>() {
-            // M is Million
             return Some((val * 1_000_000.0) as u64);
         }
     }
     None
 }
 
-/// Parses a quantization string (e.g., "Q4_0", "F16") into bits per weight (approximate).
 pub fn parse_quantization_bits(quant_str: &str) -> Option<f64> {
     let s = quant_str.trim().to_uppercase();
 
-    // 1. Exact or highly specific tokens
     let tokens = [
         ("F32", 32.0),
         ("F16", 16.0),
@@ -60,20 +56,17 @@ pub fn parse_quantization_bits(quant_str: &str) -> Option<f64> {
         }
     }
 
-    // 2. Generic Q-digit extraction fallback
-    // We look for Q followed by a digit (e.g. "Q4") but NOT followed by another digit (avoiding "Q45")
     if let Some(pos) = s.find('Q') {
         let chars: Vec<char> = s.chars().collect();
         if pos + 1 < chars.len()
             && let Some(digit) = chars[pos + 1].to_digit(10)
         {
-            // Check if it's a single digit (next char is not a digit)
             let is_single_digit = if pos + 2 < chars.len() {
                 !chars[pos + 2].is_ascii_digit()
             } else {
                 true
             };
-            
+
             if is_single_digit {
                 return Some(digit as f64 + 0.5);
             }
@@ -83,32 +76,27 @@ pub fn parse_quantization_bits(quant_str: &str) -> Option<f64> {
     None
 }
 
-/// Sanitizes a model name for display by stripping org info, tags, and common suffixes.
 pub fn sanitize_model_name(name: &str) -> String {
-    // 1. Take the last part of the path (strip org info)
     let part = name.split('/').next_back().unwrap_or(name);
-    
-    // 2. Strip the tag (e.g. :latest, :Q4_K_M)
+
     let base = part.split(':').next().unwrap_or(part);
-    
-    // 3. Clean up common superfluous patterns (case-insensitive)
+
     let mut clean = base.to_string();
     let patterns = [
-        "-GGUF", ".GGUF", "GGUF-", "GGUF.",
-        "-MXFP4", "MXFP4-", "MXFP-", "-MXFP",
-        "-IQ", "-Q4", "-Q5", "-Q6", "-Q8",
-        "-i1", "-v1", "gguf-"
+        "-GGUF", ".GGUF", "GGUF-", "GGUF.", "-MXFP4", "MXFP4-", "MXFP-", "-MXFP", "-IQ", "-Q4",
+        "-Q5", "-Q6", "-Q8", "-i1", "-v1", "gguf-",
     ];
-    
+
     for p in patterns {
         let upper_clean = clean.to_uppercase();
         if let Some(pos) = upper_clean.find(&p.to_uppercase()) {
             clean.replace_range(pos..pos + p.len(), "");
         }
     }
-    
-    // Final trim and cleanup of dangling separators
-    clean.trim_matches(|c| c == '-' || c == '_' || c == '.').to_string()
+
+    clean
+        .trim_matches(|c| c == '-' || c == '_' || c == '.')
+        .to_string()
 }
 
 #[cfg(test)]
@@ -117,10 +105,19 @@ mod tests {
 
     #[test]
     fn test_sanitize_model_name() {
-        assert_eq!(sanitize_model_name("hf.co/Felladrin/gguf-MXFP4-gpt-oss-20b-Derestricted:MXFP4_MOE"), "gpt-oss-20b-Derestricted");
-        assert_eq!(sanitize_model_name("hf.co/dphn/Dolphin3.0-Llama3.1-8B-GGUF:Q4_K_M"), "Dolphin3.0-Llama3.1-8B");
+        assert_eq!(
+            sanitize_model_name("hf.co/Felladrin/gguf-MXFP4-gpt-oss-20b-Derestricted:MXFP4_MOE"),
+            "gpt-oss-20b-Derestricted"
+        );
+        assert_eq!(
+            sanitize_model_name("hf.co/dphn/Dolphin3.0-Llama3.1-8B-GGUF:Q4_K_M"),
+            "Dolphin3.0-Llama3.1-8B"
+        );
         assert_eq!(sanitize_model_name("mipan/gpt-oss:20b-v1"), "gpt-oss");
-        assert_eq!(sanitize_model_name("csalab/sahabatai1:llama3_instruct_Q4_K_M"), "sahabatai1");
+        assert_eq!(
+            sanitize_model_name("csalab/sahabatai1:llama3_instruct_Q4_K_M"),
+            "sahabatai1"
+        );
         assert_eq!(sanitize_model_name("llama3:latest"), "llama3");
     }
 
@@ -135,29 +132,71 @@ mod tests {
 
     #[test]
     fn test_parse_quantization_bits() {
-        // User provided list from 'ollama ls'
-        assert_eq!(parse_quantization_bits("hf.co/Felladrin/gguf-MXFP4-gpt-oss-20b-Derestricted:MXFP4_MOE"), Some(4.0));
-        assert_eq!(parse_quantization_bits("hf.co/dphn/Dolphin3.0-Llama3.1-8B-GGUF:Q4_K_M"), Some(4.5));
-        assert_eq!(parse_quantization_bits("mipan/gpt-oss:20b-v1"), None); // No quant tag here
-        assert_eq!(parse_quantization_bits("mipan/llama3-instruct:8b-heretic"), None); // No quant tag
-        assert_eq!(parse_quantization_bits("hf.co/Jinx-org/Jinx-gpt-oss-20b-GGUF:Q4_K_M"), Some(4.5));
-        assert_eq!(parse_quantization_bits("hf.co/mradermacher/gpt-oss-20B-jail-broke-GGUF:Q4_K_M"), Some(4.5));
-        assert_eq!(parse_quantization_bits("hf.co/mradermacher/Qwen3-30B-A3B-abliterated-erotic-GGUF:Q4_K_M"), Some(4.5));
-        assert_eq!(parse_quantization_bits("hf.co/mradermacher/gpt-oss-20b-base-i1-GGUF:Q4_K_M"), Some(4.5));
-        assert_eq!(parse_quantization_bits("hf.co/mradermacher/gpt-oss-20B-jail-broke-i1-GGUF:Q4_K_M"), Some(4.5));
-        assert_eq!(parse_quantization_bits("danielsheep/gpt-oss-20b-Unsloth:UD-Q6_K_XL"), Some(6.6));
+        assert_eq!(
+            parse_quantization_bits(
+                "hf.co/Felladrin/gguf-MXFP4-gpt-oss-20b-Derestricted:MXFP4_MOE"
+            ),
+            Some(4.0)
+        );
+        assert_eq!(
+            parse_quantization_bits("hf.co/dphn/Dolphin3.0-Llama3.1-8B-GGUF:Q4_K_M"),
+            Some(4.5)
+        );
+        assert_eq!(parse_quantization_bits("mipan/gpt-oss:20b-v1"), None);
+        assert_eq!(
+            parse_quantization_bits("mipan/llama3-instruct:8b-heretic"),
+            None
+        );
+        assert_eq!(
+            parse_quantization_bits("hf.co/Jinx-org/Jinx-gpt-oss-20b-GGUF:Q4_K_M"),
+            Some(4.5)
+        );
+        assert_eq!(
+            parse_quantization_bits("hf.co/mradermacher/gpt-oss-20B-jail-broke-GGUF:Q4_K_M"),
+            Some(4.5)
+        );
+        assert_eq!(
+            parse_quantization_bits(
+                "hf.co/mradermacher/Qwen3-30B-A3B-abliterated-erotic-GGUF:Q4_K_M"
+            ),
+            Some(4.5)
+        );
+        assert_eq!(
+            parse_quantization_bits("hf.co/mradermacher/gpt-oss-20b-base-i1-GGUF:Q4_K_M"),
+            Some(4.5)
+        );
+        assert_eq!(
+            parse_quantization_bits("hf.co/mradermacher/gpt-oss-20B-jail-broke-i1-GGUF:Q4_K_M"),
+            Some(4.5)
+        );
+        assert_eq!(
+            parse_quantization_bits("danielsheep/gpt-oss-20b-Unsloth:UD-Q6_K_XL"),
+            Some(6.6)
+        );
         assert_eq!(parse_quantization_bits("smollm2:1.7b"), None);
         assert_eq!(parse_quantization_bits("phi3:mini"), None);
-        assert_eq!(parse_quantization_bits("hf.co/mradermacher/Lumimaid-v0.2-8B-i1-GGUF:Q4_K_M"), Some(4.5));
-        assert_eq!(parse_quantization_bits("hf.co/mradermacher/Harmonic-Lumina-12B-i1-GGUF:Q4_K_M"), Some(4.5));
-        assert_eq!(parse_quantization_bits("hf.co/mradermacher/Dirty-Muse-Writer-v01-Uncensored-Erotica-NSFW-i1-GGUF:Q6_K"), Some(6.6));
-        assert_eq!(parse_quantization_bits("csalab/sahabatai1:llama3_instruct_Q4_K_M"), Some(4.5));
-        
-        // No explicit tag
+        assert_eq!(
+            parse_quantization_bits("hf.co/mradermacher/Lumimaid-v0.2-8B-i1-GGUF:Q4_K_M"),
+            Some(4.5)
+        );
+        assert_eq!(
+            parse_quantization_bits("hf.co/mradermacher/Harmonic-Lumina-12B-i1-GGUF:Q4_K_M"),
+            Some(4.5)
+        );
+        assert_eq!(
+            parse_quantization_bits(
+                "hf.co/mradermacher/Dirty-Muse-Writer-v01-Uncensored-Erotica-NSFW-i1-GGUF:Q6_K"
+            ),
+            Some(6.6)
+        );
+        assert_eq!(
+            parse_quantization_bits("csalab/sahabatai1:llama3_instruct_Q4_K_M"),
+            Some(4.5)
+        );
+
         assert_eq!(parse_quantization_bits("smollm2:1.7b"), None);
         assert_eq!(parse_quantization_bits("smollm2:135m"), None);
-        
-        // Additional variants
+
         assert_eq!(parse_quantization_bits("Q8_0"), Some(8.5));
         assert_eq!(parse_quantization_bits("IQ2_XS"), Some(2.3));
         assert_eq!(parse_quantization_bits("model:Q5"), Some(5.5));

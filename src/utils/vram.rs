@@ -1,9 +1,6 @@
 use crate::api::modelfile;
 
 pub fn estimate_vram_usage(params: u64, quant_bits: f64) -> u64 {
-    // Formula: (Params * Quant_Bits / 8)
-    // Result is in bytes.
-    // Add 10% overhead for context (rough estimate without full config)
     let weights = (params as f64 * quant_bits / 8.0) as u64;
     weights + (weights / 10)
 }

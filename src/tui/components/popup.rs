@@ -1,8 +1,8 @@
 use ratatui::{
-    Frame,
     layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Style},
     widgets::{Block, Borders, Clear, Paragraph},
-    style::{Style, Color},
+    Frame,
 };
 use tui_textarea::TextArea;
 
@@ -25,8 +25,8 @@ impl<'a> Popup<'a> {
             .style(Style::default().bg(Color::DarkGray));
 
         let area = centered_rect(60, 20, area);
-        
-        f.render_widget(Clear, area); // Clear background
+
+        f.render_widget(Clear, area);
         f.render_widget(block, area);
 
         let chunks = Layout::default()
@@ -34,11 +34,11 @@ impl<'a> Popup<'a> {
             .margin(1)
             .constraints([Constraint::Length(3), Constraint::Min(1)].as_ref())
             .split(area);
-            
+
         f.render_widget(&self.textarea, chunks[0]);
-        
-        let help = Paragraph::new("Enter: Submit | Esc: Cancel")
-            .style(Style::default().fg(Color::White));
+
+        let help =
+            Paragraph::new("Enter: Submit | Esc: Cancel").style(Style::default().fg(Color::White));
         f.render_widget(help, chunks[1]);
     }
 }

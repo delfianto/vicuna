@@ -7,6 +7,6 @@ pub enum Event {
     TokenReceived(String),
     GenerationDone,
     Error(String),
-    SessionsFetched(Vec<(String, String, String, String)>), // id, title, model, date
-    MessagesLoaded(Vec<(String, String)>), // role, content
+    SessionsFetched(Vec<(String, String, String, String)>),
+    MessagesLoaded(Vec<(String, String)>),
 }
