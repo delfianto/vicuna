@@ -1,13 +1,15 @@
-use crate::api::types::Model;
+use crate::api::types::{Model, ShowModelResponse};
+use crossterm::event::KeyEvent;
 
 pub enum Event {
-    Input(crossterm::event::KeyEvent),
+    Input(KeyEvent),
     Tick,
     ModelsFetched(Vec<Model>),
+    SessionsFetched(Vec<(String, String, String, String)>),
+    MessagesLoaded(Vec<(String, String)>),
+    ModelInfoFetched(ShowModelResponse),
     TokenReceived(String),
     GenerationDone,
     Error(String),
-    SessionsFetched(Vec<(String, String, String, String)>),
-    MessagesLoaded(Vec<(String, String)>),
-    ModelInfoFetched(crate::api::types::ShowModelResponse),
+    ImageInitialized(Box<dyn ratatui_image::protocol::Protocol>),
 }
