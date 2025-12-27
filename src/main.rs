@@ -225,7 +225,7 @@ async fn main() -> Result<()> {
                 Action::InitImage(w, h) => {
                     let event_tx_img = event_tx_backend.clone();
                     tokio::task::spawn_blocking(move || {
-                        if let Ok(reader) = image::ImageReader::open("asset/vicuna_logo.png")
+                        if let Ok(reader) = image::ImageReader::open("asset/vicuna-logo.png")
                             && let Ok(img) = reader.decode()
                         {
                             let mut picker =
