@@ -11,7 +11,9 @@ use ratatui::{
 };
 
 pub fn draw(f: &mut Frame, app: &App, area: Rect) {
-    let header_style = Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD);
+    let header_style = Style::default()
+        .fg(Color::LightCyan)
+        .add_modifier(Modifier::BOLD);
     let header_cells = [
         "#", "Name", "Family", "Size", "Quant", "Params", "VRAM", "Modified",
     ]
@@ -23,17 +25,15 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
         let details = model.details.as_ref();
         let family = details.map(|d| d.family.as_str()).unwrap_or("?");
         let size_str = vram::format_size(model.size);
-        
+
         let mut quant_str = details
             .map(|d| d.quantization_level.clone())
             .unwrap_or_else(|| "?".to_string());
-            
+
         let params_str = details.map(|d| d.parameter_size.as_str()).unwrap_or("?");
 
-        // Try to parse quantization bits
         let mut q_bits = modelfile::parse_quantization_bits(&quant_str);
-        
-        // Fallback to parsing the model name if metadata failed or is generic 'unknown'
+
         if (q_bits.is_none() || quant_str == "unknown")
             && let Some(bits) = modelfile::parse_quantization_bits(&model.name)
         {
@@ -44,21 +44,19 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
                 if tag.contains('Q') || tag.contains("MXFP") || tag.contains("IQ") {
                     quant_str = tag.to_string();
                 } else if let Some(q_pos) = upper_name.find("-Q") {
-                     quant_str = model.name[q_pos+1..].to_string();
+                    quant_str = model.name[q_pos + 1..].to_string();
                 }
             } else if upper_name.contains("Q4_K_M") {
-                 quant_str = "Q4_K_M".to_string();
+                quant_str = "Q4_K_M".to_string();
             }
         }
 
-        let vram_est = if let (Some(p), Some(q)) = (
-            modelfile::parse_parameter_size(params_str),
-            q_bits,
-        ) {
-            vram::estimate_vram_usage(p, q)
-        } else {
-            0
-        };
+        let vram_est =
+            if let (Some(p), Some(q)) = (modelfile::parse_parameter_size(params_str), q_bits) {
+                vram::estimate_vram_usage(p, q)
+            } else {
+                0
+            };
         let vram_str = if vram_est > 0 {
             vram::format_size(vram_est)
         } else {
@@ -104,7 +102,7 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
         Block::default()
             .borders(Borders::ALL)
             .title(format!(" Models (Sorted by {:?}) ", app.sort_column))
-            .border_style(Style::default().fg(Color::LightMagenta))
+            .border_style(Style::default().fg(Color::LightMagenta)),
     )
     .row_highlight_style(styles::HIGHLIGHT_STYLE);
 

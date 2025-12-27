@@ -37,12 +37,7 @@ impl OllamaClient {
         let req = ShowModelRequest {
             name: name.to_string(),
         };
-        let resp = self
-            .client
-            .post(&url)
-            .json(&req)
-            .send()
-            .await?;
+        let resp = self.client.post(&url).json(&req).send().await?;
         let info = resp.json().await?;
         Ok(info)
     }

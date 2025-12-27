@@ -2,16 +2,15 @@ use anyhow::Result;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
     execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{
-    Terminal,
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     text::Span,
     widgets::Paragraph,
-    Frame,
+    Frame, Terminal,
 };
 use std::io;
 use tokio::sync::mpsc;
@@ -46,7 +45,6 @@ pub async fn run_app(
     mut event_rx: mpsc::UnboundedReceiver<Event>,
     action_tx: mpsc::UnboundedSender<Action>,
 ) -> Result<()> {
-    // Initial fetch
     let _ = action_tx.send(Action::FetchModels);
 
     loop {
@@ -88,7 +86,6 @@ pub async fn run_app(
                 }
                 Event::ModelsFetched(models) => {
                     app.models = models;
-                    // Reset to Name sort on fresh fetch to ensure consistency with request
                     app.sort_column = crate::app::SortColumn::Name;
                     app.sort_models();
                 }
@@ -96,10 +93,10 @@ pub async fn run_app(
                     app.sessions = sessions;
                 }
                 Event::MessagesLoaded(messages) => {
-                    // Convert raw messages to App Messages
-                    app.messages = messages.into_iter().map(|(role, content)| {
-                        crate::app::Message { role, content }
-                    }).collect();
+                    app.messages = messages
+                        .into_iter()
+                        .map(|(role, content)| crate::app::Message { role, content })
+                        .collect();
                 }
                 Event::TokenReceived(token) => {
                     let should_append = if let Some(last) = app.messages.last() {
@@ -121,7 +118,6 @@ pub async fn run_app(
                 }
                 Event::GenerationDone => {
                     app.is_generating = false;
-                    // Save the assistant's full response
                     if let Some(last_msg) = app.messages.last()
                         && last_msg.role == "assistant"
                         && let Some(session_id) = &app.current_session_id
@@ -157,7 +153,12 @@ fn draw_help_bar(f: &mut Frame, app: &App, area: Rect) {
     if app.current_tab == CurrentTab::Models
         && let Some(model) = app.models.get(app.selected_model_index)
     {
-        spans.push(Span::styled(format!(" {} ", model.name), Style::default().fg(Color::Yellow).bg(Color::Rgb(40, 40, 40))));
+        spans.push(Span::styled(
+            format!(" {} ", model.name),
+            Style::default()
+                .fg(Color::Yellow)
+                .bg(Color::Rgb(40, 40, 40)),
+        ));
         spans.push(Span::raw(" "));
     }
 
@@ -187,6 +188,7 @@ fn draw_help_bar(f: &mut Frame, app: &App, area: Rect) {
         spans.push(Span::styled(format!(" {} ", desc), desc_style));
     }
 
-    let p = Paragraph::new(ratatui::text::Line::from(spans)).style(Style::default().bg(Color::Rgb(20, 20, 20)));
+    let p = Paragraph::new(ratatui::text::Line::from(spans))
+        .style(Style::default().bg(Color::Rgb(20, 20, 20)));
     f.render_widget(p, area);
 }

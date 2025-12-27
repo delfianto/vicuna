@@ -1,23 +1,22 @@
 use ratatui::{
-    Frame,
     layout::Rect,
     style::{Color, Style},
     widgets::{Block, Borders, Clear, Paragraph},
+    Frame,
 };
 
 #[derive(Clone, Debug)]
 pub struct Toast {
     pub message: String,
-    pub duration: usize, // ticks
+    pub duration: usize,
     pub color: Color,
 }
 
 pub fn draw(f: &mut Frame, toast: &Toast, area: Rect) {
-    // Simple centered toast
     let width = 40;
     let height = 3;
     let x = (area.width.saturating_sub(width)) / 2;
-    let y = 1; // Top
+    let y = 1;
 
     let toast_area = Rect::new(x, y, width, height);
 

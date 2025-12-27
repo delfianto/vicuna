@@ -11,14 +11,12 @@ pub enum Action {
     Quit,
     DeleteModel(String),
     PullModel(String),
-    Generate(String, String), // prompt, model
-    
-    // Session Actions
+    Generate(String, String),
     FetchSessions,
     LoadSession(String),
     DeleteSession(String),
-    CreateSession(String, String, String), // id, title, model
-    SaveMessage(String, String, String), // session_id, role, content
+    CreateSession(String, String, String),
+    SaveMessage(String, String, String),
 }
 
 #[derive(Clone, Debug)]
@@ -61,14 +59,12 @@ pub struct App {
     pub messages: Vec<Message>,
     pub is_generating: bool,
     pub toasts: Vec<Toast>,
-    
-    // Session State
-    pub sessions: Vec<(String, String, String, String)>, // id, title, model, date
+
+    pub sessions: Vec<(String, String, String, String)>,
     pub selected_session_index: usize,
     pub current_session_id: Option<String>,
     pub chat_scroll: u16,
 
-    // Popup State
     pub show_popup: bool,
     pub popup: Popup<'static>,
 }
@@ -120,7 +116,8 @@ impl App {
                 self.models.sort_by(|a, b| a.size.cmp(&b.size));
             }
             SortColumn::Modified => {
-                self.models.sort_by(|a, b| a.modified_at.cmp(&b.modified_at));
+                self.models
+                    .sort_by(|a, b| a.modified_at.cmp(&b.modified_at));
             }
         }
     }
@@ -150,19 +147,21 @@ impl App {
         }
 
         match key.code {
-            KeyCode::Char('q') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
-                 self.should_quit = true;
-                 vec![Action::Quit]
+            KeyCode::Char('q')
+                if key
+                    .modifiers
+                    .contains(crossterm::event::KeyModifiers::CONTROL) =>
+            {
+                self.should_quit = true;
+                vec![Action::Quit]
             }
-            KeyCode::Char('q') => {
-                 match self.current_tab {
-                     CurrentTab::Models => {
-                         self.should_quit = true;
-                         vec![Action::Quit]
-                     }
-                     CurrentTab::Chat => self.on_key_chat(key),
-                 }
-            }
+            KeyCode::Char('q') => match self.current_tab {
+                CurrentTab::Models => {
+                    self.should_quit = true;
+                    vec![Action::Quit]
+                }
+                CurrentTab::Chat => self.on_key_chat(key),
+            },
             KeyCode::Tab => {
                 self.current_tab = match self.current_tab {
                     CurrentTab::Models => CurrentTab::Chat,
@@ -187,8 +186,12 @@ impl App {
                 let model_name = self.popup.textarea.lines().join("").trim().to_string();
                 if !model_name.is_empty() {
                     self.show_popup = false;
-                    self.popup.textarea = tui_textarea::TextArea::default(); // Reset
-                    self.popup.textarea.set_block(ratatui::widgets::Block::default().borders(ratatui::widgets::Borders::ALL).title("Input"));
+                    self.popup.textarea = tui_textarea::TextArea::default();
+                    self.popup.textarea.set_block(
+                        ratatui::widgets::Block::default()
+                            .borders(ratatui::widgets::Borders::ALL)
+                            .title("Input"),
+                    );
                     vec![Action::PullModel(model_name)]
                 } else {
                     vec![]
@@ -219,11 +222,19 @@ impl App {
                 self.chat_scroll = self.chat_scroll.saturating_add(3);
                 return vec![];
             }
-            KeyCode::Left if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
+            KeyCode::Left
+                if key
+                    .modifiers
+                    .contains(crossterm::event::KeyModifiers::CONTROL) =>
+            {
                 self.chat_focus = ChatFocus::Sessions;
                 return vec![];
             }
-            KeyCode::Right if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
+            KeyCode::Right
+                if key
+                    .modifiers
+                    .contains(crossterm::event::KeyModifiers::CONTROL) =>
+            {
                 self.chat_focus = ChatFocus::Input;
                 return vec![];
             }
@@ -237,7 +248,9 @@ impl App {
         match self.chat_focus {
             ChatFocus::Sessions => match key.code {
                 KeyCode::Char('j') | KeyCode::Down => {
-                    if !self.sessions.is_empty() && self.selected_session_index < self.sessions.len() - 1 {
+                    if !self.sessions.is_empty()
+                        && self.selected_session_index < self.sessions.len() - 1
+                    {
                         self.selected_session_index += 1;
                     }
                     vec![]
@@ -249,24 +262,26 @@ impl App {
                     vec![]
                 }
                 KeyCode::Enter => {
-                     if let Some(session) = self.sessions.get(self.selected_session_index) {
+                    if let Some(session) = self.sessions.get(self.selected_session_index) {
                         let id = session.0.clone();
                         let model_name = session.2.clone();
-                        
+
                         if let Some(idx) = self.models.iter().position(|m| m.name == model_name) {
                             self.selected_model_index = idx;
                         }
-                        
+
                         self.current_session_id = Some(id.clone());
-                        // Move focus back to input so user can type immediately
                         self.chat_focus = ChatFocus::Input;
                         vec![Action::LoadSession(id)]
-                     } else {
-                         vec![]
-                     }
+                    } else {
+                        vec![]
+                    }
                 }
-                KeyCode::Char('n') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
-                    // New Session
+                KeyCode::Char('n')
+                    if key
+                        .modifiers
+                        .contains(crossterm::event::KeyModifiers::CONTROL) =>
+                {
                     self.messages.clear();
                     self.current_session_id = None;
                     self.chat_scroll = 0;
@@ -276,7 +291,6 @@ impl App {
                 KeyCode::Char('d') => {
                     if let Some(session) = self.sessions.get(self.selected_session_index) {
                         let id = session.0.clone();
-                        // If deleting active session, clear chat
                         if let Some(current) = &self.current_session_id
                             && current == &id
                         {
@@ -288,18 +302,19 @@ impl App {
                         vec![]
                     }
                 }
-                 _ => vec![]
+                _ => vec![],
             },
             ChatFocus::Input => match key.code {
-                KeyCode::Char('n') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
-                    // New Session
+                KeyCode::Char('n')
+                    if key
+                        .modifiers
+                        .contains(crossterm::event::KeyModifiers::CONTROL) =>
+                {
                     self.messages.clear();
                     self.current_session_id = None;
                     self.chat_scroll = 0;
                     vec![]
                 }
-                // Keep legacy shortcuts for convenience? Maybe not to avoid confusion.
-                // Removing Ctrl+j/k legacy handlers in favor of explicit focus.
                 KeyCode::Enter => {
                     let text = self.input.lines().join("\n");
                     if !text.trim().is_empty() {
@@ -327,24 +342,28 @@ impl App {
 
                         let mut actions = Vec::new();
 
-                        // Handle Session Creation if needed
                         let session_id = if let Some(id) = &self.current_session_id {
                             id.clone()
                         } else {
                             let new_id = Uuid::new_v4().to_string();
-                            // Generate a title from the prompt (truncated)
                             let title = prompt.chars().take(20).collect::<String>();
                             self.current_session_id = Some(new_id.clone());
-                            actions.push(Action::CreateSession(new_id.clone(), title, model_name.clone()));
+                            actions.push(Action::CreateSession(
+                                new_id.clone(),
+                                title,
+                                model_name.clone(),
+                            ));
                             new_id
                         };
 
-                        // Save User Message
-                        actions.push(Action::SaveMessage(session_id, "user".to_string(), prompt.clone()));
-                        
-                        // Generate
+                        actions.push(Action::SaveMessage(
+                            session_id,
+                            "user".to_string(),
+                            prompt.clone(),
+                        ));
+
                         actions.push(Action::Generate(prompt, model_name));
-                        
+
                         return actions;
                     }
                     vec![]
@@ -353,7 +372,7 @@ impl App {
                     self.input.input(key);
                     vec![]
                 }
-            }
+            },
         }
     }
 
@@ -393,7 +412,6 @@ impl App {
             }
             KeyCode::Enter => {
                 self.current_tab = CurrentTab::Chat;
-                // Start fresh session with this model
                 self.messages.clear();
                 self.current_session_id = None;
                 self.chat_scroll = 0;
@@ -407,7 +425,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crossterm::event::{KeyEvent, KeyModifiers, KeyEventKind, KeyEventState};
+    use crossterm::event::{KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 
     fn mock_key(code: KeyCode) -> KeyEvent {
         KeyEvent {
@@ -488,16 +506,28 @@ mod tests {
             db_path: "/tmp/test.db".into(),
         };
         let mut app = App::new(config);
-        
+
         use crate::api::types::Model;
         app.models = vec![
-            Model { name: "z-org/alpha:latest".into(), modified_at: "".into(), size: 0, digest: "".into(), details: None },
-            Model { name: "a-org/zebra:latest".into(), modified_at: "".into(), size: 0, digest: "".into(), details: None },
+            Model {
+                name: "z-org/alpha:latest".into(),
+                modified_at: "".into(),
+                size: 0,
+                digest: "".into(),
+                details: None,
+            },
+            Model {
+                name: "a-org/zebra:latest".into(),
+                modified_at: "".into(),
+                size: 0,
+                digest: "".into(),
+                details: None,
+            },
         ];
-        
+
         app.sort_column = SortColumn::Name;
         app.sort_models();
-        
+
         assert_eq!(app.models[0].name, "z-org/alpha:latest");
         assert_eq!(app.models[1].name, "a-org/zebra:latest");
     }

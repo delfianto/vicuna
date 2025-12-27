@@ -14,7 +14,6 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
         .constraints([Constraint::Percentage(20), Constraint::Percentage(80)].as_ref())
         .split(area);
 
-    // Session List (Left)
     let sessions: Vec<ListItem> = app
         .sessions
         .iter()
@@ -27,7 +26,12 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
         .collect();
 
     let (session_border_style, session_border_type) = if app.chat_focus == ChatFocus::Sessions {
-        (Style::default().fg(Color::LightYellow).add_modifier(Modifier::BOLD), BorderType::Thick)
+        (
+            Style::default()
+                .fg(Color::LightYellow)
+                .add_modifier(Modifier::BOLD),
+            BorderType::Thick,
+        )
     } else {
         (Style::default().fg(Color::DarkGray), BorderType::Plain)
     };
@@ -38,42 +42,46 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
                 .borders(Borders::ALL)
                 .border_type(session_border_type)
                 .title("Sessions")
-                .border_style(session_border_style)
+                .border_style(session_border_style),
         )
-        .highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD))
+        .highlight_style(
+            Style::default()
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
+        )
         .highlight_symbol(" ➤ ");
 
     let mut state = ratatui::widgets::ListState::default();
     state.select(Some(app.selected_session_index));
-    
+
     f.render_stateful_widget(sessions_list, chunks[0], &mut state);
 
-    // Chat Area (Right)
-    let estimated_width = chunks[1].width.saturating_sub(4).max(1); // Account for borders and padding
+    let estimated_width = chunks[1].width.saturating_sub(4).max(1);
     let mut visual_input_lines = 0;
     for line in app.input.lines() {
         let len = line.chars().count() as u16;
         if len == 0 {
             visual_input_lines += 1;
         } else {
-            visual_input_lines += (len + estimated_width - 1) / estimated_width;
+            visual_input_lines += len.div_ceil(estimated_width);
         }
     }
     let input_height = (visual_input_lines + 2).clamp(3, 15);
 
     let chat_chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(input_height)].as_ref()) 
+        .constraints([Constraint::Min(1), Constraint::Length(input_height)].as_ref())
         .split(chunks[1]);
 
     let messages_area = chat_chunks[0];
     let input_area = chat_chunks[1];
 
-    let model_name = app.models.get(app.selected_model_index)
+    let model_name = app
+        .models
+        .get(app.selected_model_index)
         .map(|m| m.name.clone())
         .unwrap_or_else(|| "Unknown".to_string());
 
-    // Render Messages
     let history_md = app
         .messages
         .iter()
@@ -82,54 +90,62 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
         .join("\n\n---\n\n");
 
     let chat_title = format!(" Chat with {} ", model_name);
-    
-    // Gradient-like effect for Chat border based on active model index?
-    // Let's just use a fixed nice color, or rainbow based on model index.
+
     let chat_border_color = styles::RAINBOW[app.selected_model_index % styles::RAINBOW.len()];
-    
+
     let viewer = MarkdownViewer::new(&history_md)
-        .block(Block::default()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .title(ratatui::text::Span::styled(
-                chat_title,
-                Style::default().fg(chat_border_color).add_modifier(Modifier::BOLD)
-            ))
-            .border_style(Style::default().fg(chat_border_color))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title(ratatui::text::Span::styled(
+                    chat_title,
+                    Style::default()
+                        .fg(chat_border_color)
+                        .add_modifier(Modifier::BOLD),
+                ))
+                .border_style(Style::default().fg(chat_border_color)),
         )
         .scroll(app.chat_scroll);
 
     f.render_widget(viewer, messages_area);
 
-    // Render Input
     let (input_border_style, input_border_type) = if app.chat_focus == ChatFocus::Input {
-        (Style::default().fg(Color::LightYellow).add_modifier(Modifier::BOLD), BorderType::Thick)
+        (
+            Style::default()
+                .fg(Color::LightYellow)
+                .add_modifier(Modifier::BOLD),
+            BorderType::Thick,
+        )
     } else {
         (Style::default().fg(Color::DarkGray), BorderType::Plain)
     };
-    
-    // Create a clone of the input to modify its block style for rendering
+
     let mut input = app.input.clone();
     input.set_block(
         ratatui::widgets::Block::default()
             .borders(Borders::ALL)
             .border_type(input_border_type)
             .title("Input")
-            .border_style(input_border_style)
+            .border_style(input_border_style),
     );
-    
+
     f.render_widget(&input, input_area);
 
-    // Render input scrollbar if content is larger than input area
     if visual_input_lines > input_height.saturating_sub(2) {
-        let scrollbar = ratatui::widgets::Scrollbar::new(ratatui::widgets::ScrollbarOrientation::VerticalRight)
-            .begin_symbol(Some("▲"))
-            .end_symbol(Some("▼"));
-        let mut scrollbar_state = ratatui::widgets::ScrollbarState::new(visual_input_lines as usize)
-            .position(app.input.cursor().0);
+        let scrollbar =
+            ratatui::widgets::Scrollbar::new(ratatui::widgets::ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("▲"))
+                .end_symbol(Some("▼"));
+        let mut scrollbar_state =
+            ratatui::widgets::ScrollbarState::new(visual_input_lines as usize)
+                .position(app.input.cursor().0);
         f.render_stateful_widget(
             scrollbar,
-            input_area.inner(ratatui::layout::Margin { vertical: 1, horizontal: 0 }),
+            input_area.inner(ratatui::layout::Margin {
+                vertical: 1,
+                horizontal: 0,
+            }),
             &mut scrollbar_state,
         );
     }
