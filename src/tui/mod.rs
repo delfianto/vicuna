@@ -8,7 +8,7 @@ use ratatui::{
     Frame, Terminal,
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::Span,
     widgets::Paragraph,
 };
@@ -46,23 +46,30 @@ pub async fn run_app(
     action_tx: mpsc::UnboundedSender<Action>,
 ) -> Result<()> {
     let _ = action_tx.send(Action::FetchModels);
+    let _ = action_tx.send(Action::InitImage(60, 20));
 
     loop {
         terminal.draw(|f| {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([Constraint::Min(0), Constraint::Length(1)])
+                .constraints([
+                    Constraint::Min(0),
+                    Constraint::Length(1), // Status Bar
+                    Constraint::Length(1), // Help Bar
+                ])
                 .split(f.area());
 
             let area = chunks[0];
-            let bottom_area = chunks[1];
+            let status_area = chunks[1];
+            let help_area = chunks[2];
 
             match app.current_tab {
                 CurrentTab::Models => tabs::models::draw(f, &app, area),
                 CurrentTab::Chat => tabs::chat::draw(f, &app, area),
             }
 
-            draw_help_bar(f, &app, bottom_area);
+            draw_status_bar(f, &app, status_area);
+            draw_help_bar(f, &app, help_area);
 
             if app.show_popup {
                 app.popup.draw(f, area);
@@ -135,6 +142,9 @@ pub async fn run_app(
                 Event::Error(msg) => {
                     app.show_error(&msg);
                 }
+                Event::ImageInitialized(protocol) => {
+                    app.logo = Some(protocol);
+                }
                 Event::Tick => {
                     app.on_tick();
                 }
@@ -143,31 +153,50 @@ pub async fn run_app(
     }
 }
 
-fn draw_help_bar(f: &mut Frame, app: &App, area: Rect) {
+fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
     let mode_style = Style::default().fg(Color::Black).bg(Color::Cyan);
-    let key_style = Style::default().fg(Color::DarkGray);
-    let desc_style = Style::default().fg(Color::White);
-
     let mut spans = vec![
         Span::styled(format!(" {:?} ", app.current_tab), mode_style),
         Span::raw(" "),
     ];
 
-    if app.current_tab == CurrentTab::Models
-        && let Some(model) = app.models.get(app.selected_model_index)
-    {
-        spans.push(Span::styled(
-            format!(" {} ", model.name),
-            Style::default()
-                .fg(Color::Yellow)
-                .bg(Color::Rgb(40, 40, 40)),
-        ));
-        spans.push(Span::raw(" "));
+    if app.current_tab == CurrentTab::Models {
+        if let Some(model) = app.models.get(app.selected_model_index) {
+            spans.push(Span::styled(
+                format!(" {} ", model.name),
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            ));
+        }
+    } else if app.current_tab == CurrentTab::Chat {
+        if let Some(session_id) = &app.current_session_id {
+            if let Some(session) = app.sessions.iter().find(|s| s.0 == *session_id) {
+                spans.push(Span::styled(
+                    format!(" {} ", session.1),
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                ));
+            }
+        } else {
+            spans.push(Span::styled(
+                " New Chat ",
+                Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
+            ));
+        }
     }
+
+    let p = Paragraph::new(ratatui::text::Line::from(spans))
+        .style(Style::default().bg(Color::Rgb(30, 30, 30)));
+    f.render_widget(p, area);
+}
+
+fn draw_help_bar(f: &mut Frame, app: &App, area: Rect) {
+    let key_style = Style::default().fg(Color::Cyan);
+    let desc_style = Style::default().fg(Color::White);
+
+    let mut spans = vec![];
 
     let keys = match app.current_tab {
         CurrentTab::Models => vec![
-            ("Ctrl+Tab", "Tab"),
+            ("Ctrl+D", "Chat"),
             ("Tab", "Pane"),
             ("j/k", "Nav"),
             ("Enter", "Chat"),
@@ -178,7 +207,7 @@ fn draw_help_bar(f: &mut Frame, app: &App, area: Rect) {
             ("Ctrl+q", "Quit"),
         ],
         CurrentTab::Chat => vec![
-            ("Ctrl+Tab", "Tab"),
+            ("Ctrl+A", "Models"),
             ("Tab", "Pane"),
             ("Enter", "Send/Load"),
             ("Ctrl+Arrows", "Switch Pane"),
@@ -189,7 +218,10 @@ fn draw_help_bar(f: &mut Frame, app: &App, area: Rect) {
         ],
     };
 
-    for (key, desc) in keys {
+    for (i, (key, desc)) in keys.into_iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::raw(" "));
+        }
         spans.push(Span::styled(format!("<{}>", key), key_style));
         spans.push(Span::styled(format!(" {} ", desc), desc_style));
     }

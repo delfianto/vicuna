@@ -222,6 +222,29 @@ async fn main() -> Result<()> {
                         }
                     });
                 }
+                Action::InitImage(w, h) => {
+                    let event_tx_img = event_tx_backend.clone();
+                    tokio::task::spawn_blocking(move || {
+                        if let Ok(reader) = image::ImageReader::open("asset/vicuna_logo.png")
+                            && let Ok(img) = reader.decode()
+                        {
+                            let mut picker =
+                                ratatui_image::picker::Picker::from_termios().unwrap_or_else(|_| {
+                                    ratatui_image::picker::Picker::new((8, 16))
+                                });
+                            
+                            picker.guess_protocol();
+
+                            if let Ok(protocol) = picker.new_protocol(
+                                img,
+                                ratatui::layout::Rect::new(0, 0, w, h),
+                                ratatui_image::Resize::Fit(Some(image::imageops::FilterType::Lanczos3)),
+                            ) {
+                                event_tx_img.send(Event::ImageInitialized(protocol)).ok();
+                            }
+                        }
+                    });
+                }
             }
         }
     });

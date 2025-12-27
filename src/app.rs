@@ -19,6 +19,7 @@ pub enum Action {
     DeleteSession(String),
     CreateSession(String, String, String),
     SaveMessage(String, String, String),
+    InitImage(u16, u16),
 }
 
 #[derive(Clone, Debug)]
@@ -79,6 +80,7 @@ pub struct App {
 
     pub show_popup: bool,
     pub popup: Popup<'static>,
+    pub logo: Option<Box<dyn ratatui_image::protocol::Protocol>>,
 }
 
 impl App {
@@ -116,6 +118,7 @@ impl App {
             chat_scroll: 0,
             show_popup: false,
             popup,
+            logo: None,
         }
     }
 
@@ -182,15 +185,20 @@ impl App {
                 }
                 CurrentTab::Chat => self.on_key_chat(key),
             },
-            KeyCode::Tab
+            KeyCode::Char('a')
                 if key
                     .modifiers
                     .contains(crossterm::event::KeyModifiers::CONTROL) =>
             {
-                self.current_tab = match self.current_tab {
-                    CurrentTab::Models => CurrentTab::Chat,
-                    CurrentTab::Chat => CurrentTab::Models,
-                };
+                self.current_tab = CurrentTab::Models;
+                vec![]
+            }
+            KeyCode::Char('d')
+                if key
+                    .modifiers
+                    .contains(crossterm::event::KeyModifiers::CONTROL) =>
+            {
+                self.current_tab = CurrentTab::Chat;
                 vec![]
             }
             KeyCode::Tab => {
@@ -551,10 +559,10 @@ mod tests {
         let mut app = App::new(config);
         assert_eq!(app.current_tab, CurrentTab::Models);
 
-        app.on_key(mock_key_ctrl(KeyCode::Tab));
+        app.on_key(mock_key_ctrl(KeyCode::Char('d')));
         assert_eq!(app.current_tab, CurrentTab::Chat);
 
-        app.on_key(mock_key_ctrl(KeyCode::Tab));
+        app.on_key(mock_key_ctrl(KeyCode::Char('a')));
         assert_eq!(app.current_tab, CurrentTab::Models);
     }
 

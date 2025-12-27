@@ -41,7 +41,7 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_type(session_border_type)
-                .title("Sessions")
+                .title(" Sessions ")
                 .border_style(session_border_style),
         )
         .highlight_style(
@@ -76,39 +76,43 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
     let messages_area = chat_chunks[0];
     let input_area = chat_chunks[1];
 
-    let model_name = app
-        .models
-        .get(app.selected_model_index)
-        .map(|m| m.name.clone())
-        .unwrap_or_else(|| "Unknown".to_string());
+    if app.messages.is_empty() {
+        draw_empty_chat(f, app, messages_area);
+    } else {
+        let model_name = app
+            .models
+            .get(app.selected_model_index)
+            .map(|m| m.name.clone())
+            .unwrap_or_else(|| "Unknown".to_string());
 
-    let history_md = app
-        .messages
-        .iter()
-        .map(|m| format!("**{}**:\n{}", m.role.to_uppercase(), m.content))
-        .collect::<Vec<_>>()
-        .join("\n\n---\n\n");
+        let history_md = app
+            .messages
+            .iter()
+            .map(|m| format!("**{}**:\n{}", m.role.to_uppercase(), m.content))
+            .collect::<Vec<_>>()
+            .join("\n\n---\n\n");
 
-    let chat_title = format!(" Chat with {} ", model_name);
+        let chat_title = format!(" Chat with {} ", model_name);
 
-    let chat_border_color = styles::RAINBOW[app.selected_model_index % styles::RAINBOW.len()];
+        let chat_border_color = styles::RAINBOW[app.selected_model_index % styles::RAINBOW.len()];
 
-    let viewer = MarkdownViewer::new(&history_md)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .title(ratatui::text::Span::styled(
-                    chat_title,
-                    Style::default()
-                        .fg(chat_border_color)
-                        .add_modifier(Modifier::BOLD),
-                ))
-                .border_style(Style::default().fg(chat_border_color)),
-        )
-        .scroll(app.chat_scroll);
+        let viewer = MarkdownViewer::new(&history_md)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .title(ratatui::text::Span::styled(
+                        chat_title,
+                        Style::default()
+                            .fg(chat_border_color)
+                            .add_modifier(Modifier::BOLD),
+                    ))
+                    .border_style(Style::default().fg(chat_border_color)),
+            )
+            .scroll(app.chat_scroll);
 
-    f.render_widget(viewer, messages_area);
+        f.render_widget(viewer, messages_area);
+    }
 
     let (input_border_style, input_border_type) = if app.chat_focus == ChatFocus::Input {
         (
@@ -126,7 +130,7 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
         ratatui::widgets::Block::default()
             .borders(Borders::ALL)
             .border_type(input_border_type)
-            .title("Input")
+            .title(" Input ")
             .border_style(input_border_style),
     );
 
@@ -149,4 +153,68 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
             &mut scrollbar_state,
         );
     }
+}
+
+fn draw_empty_chat(f: &mut ratatui::Frame, app: &App, area: Rect) {
+    let model_name = app
+        .models
+        .get(app.selected_model_index)
+        .map(|m| m.name.clone())
+        .unwrap_or_else(|| "Unknown".to_string());
+
+    let chat_border_color = styles::RAINBOW[app.selected_model_index % styles::RAINBOW.len()];
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .title(ratatui::text::Span::styled(
+            format!(" New Chat with {} ", model_name),
+            Style::default()
+                .fg(chat_border_color)
+                .add_modifier(Modifier::BOLD),
+        ))
+        .border_style(Style::default().fg(chat_border_color));
+
+    let inner_area = block.inner(area);
+    f.render_widget(block, area);
+
+    let center_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(1),
+            Constraint::Length(20), // Reduced Image height
+            Constraint::Length(2),  // Instruction height
+            Constraint::Min(1),
+        ])
+        .split(inner_area);
+
+    if let Some(logo) = &app.logo {
+        let image_area = center_layout[1];
+        // Center the image horizontally
+        let image_width = 60; // Reduced width
+        let horizontal_layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage((100 - (image_width * 100 / inner_area.width.max(1))) / 2),
+                Constraint::Length(image_width),
+                Constraint::Percentage((100 - (image_width * 100 / inner_area.width.max(1))) / 2),
+            ])
+            .split(image_area);
+        
+        let image_widget = ratatui_image::Image::new(logo.as_ref());
+        f.render_widget(image_widget, horizontal_layout[1]);
+    }
+
+    let instructions = ratatui::text::Line::from(vec![
+        ratatui::text::Span::raw("Type a message to start chatting with "),
+        ratatui::text::Span::styled(
+            &model_name,
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+    ]);
+
+    let inst_p = ratatui::widgets::Paragraph::new(instructions)
+        .alignment(ratatui::layout::Alignment::Center);
+    f.render_widget(inst_p, center_layout[2]);
 }
