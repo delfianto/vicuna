@@ -1,5 +1,6 @@
 mod api;
 mod app;
+mod assets;
 mod backend;
 mod config;
 mod db;
@@ -57,7 +58,6 @@ async fn main() -> Result<()> {
     let mut terminal = tui::init()?;
     let app = App::new(config.clone());
 
-    // Initial actions
     action_tx.send(Action::FetchModels).ok();
     action_tx.send(Action::FetchSessions).ok();
 

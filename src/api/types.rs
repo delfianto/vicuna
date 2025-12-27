@@ -55,7 +55,7 @@ pub struct ShowModelResponse {
     pub details: Option<ModelDetails>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 pub struct GenerateRequest {
     pub model: String,
     pub prompt: String,
@@ -64,9 +64,8 @@ pub struct GenerateRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub template: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub context: Option<Vec<i32>>, // For history (legacy), usually handled by maintaining conversation
+    pub context: Option<Vec<u64>>,
     pub stream: Option<bool>,
-    // Add other options as needed
 }
 
 #[derive(Debug, Deserialize, Serialize)]

@@ -576,13 +576,11 @@ mod tests {
         };
         let mut app = App::new(config);
 
-        // Models Tab (no info)
         app.current_tab = CurrentTab::Models;
         app.show_info = false;
         app.on_key(mock_key(KeyCode::Tab));
-        assert_eq!(app.models_focus, ModelsFocus::List); // Should not change if info hidden
+        assert_eq!(app.models_focus, ModelsFocus::List);
 
-        // Models Tab (with info)
         app.show_info = true;
         app.models_focus = ModelsFocus::List;
         app.on_key(mock_key(KeyCode::Tab));
@@ -590,14 +588,12 @@ mod tests {
         app.on_key(mock_key(KeyCode::Tab));
         assert_eq!(app.models_focus, ModelsFocus::List);
 
-        // Models Tab Enter Reset
         app.show_info = true;
         app.models_focus = ModelsFocus::Info;
         app.on_key(mock_key(KeyCode::Enter));
         assert_eq!(app.current_tab, CurrentTab::Chat);
         assert_eq!(app.models_focus, ModelsFocus::List);
 
-        // Chat Tab
         app.current_tab = CurrentTab::Chat;
         app.chat_focus = ChatFocus::Input;
         app.on_key(mock_key(KeyCode::Tab));

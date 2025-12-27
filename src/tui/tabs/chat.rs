@@ -181,16 +181,15 @@ fn draw_empty_chat(f: &mut ratatui::Frame, app: &App, area: Rect) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Min(1),
-            Constraint::Length(20), // Reduced Image height
-            Constraint::Length(2),  // Instruction height
+            Constraint::Length(20),
+            Constraint::Length(2),
             Constraint::Min(1),
         ])
         .split(inner_area);
 
     if let Some(logo) = &app.logo {
         let image_area = center_layout[1];
-        // Center the image horizontally
-        let image_width = 60; // Reduced width
+        let image_width = 60;
         let horizontal_layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([

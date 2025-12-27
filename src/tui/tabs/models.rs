@@ -184,7 +184,6 @@ fn draw_info_pane(f: &mut Frame, app: &App, area: Rect) {
 
         let inner_area = block.inner(area);
 
-        // Simple height estimation for clamping (wrapped lines)
         let mut visual_lines = 0;
         for line in details.lines() {
             let len = line.chars().count() as u16;
@@ -206,7 +205,6 @@ fn draw_info_pane(f: &mut Frame, app: &App, area: Rect) {
 
         f.render_widget(p, area);
 
-        // Render scrollbar
         if visual_lines > inner_area.height {
             let scrollbar = ratatui::widgets::Scrollbar::new(
                 ratatui::widgets::ScrollbarOrientation::VerticalRight,
