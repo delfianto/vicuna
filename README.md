@@ -1,18 +1,20 @@
+<div align="center">
+
+[<img src="asset/vicuna-logo.png" width="400" alt="Vicuna Logo" />](https://github.com/delfianto/vicuna)
+
 # Vicuna
 
-**Vicuna** is a high-performance, feature-rich terminal-based client for [Ollama](https://ollama.com/), built in **Rust**. It aims to provide a robust, "OpenWebUI-like" experience directly in your terminal, focusing on speed, type safety, and efficient resource management.
+</div>
+
+**Vicuna** is a minimalist terminal-based client for [Ollama](https://ollama.com/), built in **Rust**.
 
 ## Features
 
-- **🚀 High Performance:** Built with Rust and `ratatui` for 60 FPS responsiveness.
+- **🚀 High Performance:** Built with Rust and `ratatui`.
 - **💾 Local Database:** SQLite backend (via LibSQL) stores sessions and message history.
 - **🧠 Model Management:** View, pull, and delete models directly from the TUI.
-- **🎨 Colorful UI:** Vibrant, rainbow-styled interface with prominent active state indicators.
-- **📊 VRAM Estimation:** Real-time estimation of VRAM usage for loaded models.
 - **📝 Markdown Support:** Rich rendering of assistant responses including code blocks and formatting.
 - **🔄 Streaming:** Real-time token streaming for immediate feedback.
-- **⌨️ Shortcuts:** Context-aware keybinding help bar at the bottom of the screen.
-- **🔗 Smart Context:** Automatically switches models when resuming old chat sessions.
 - **🧹 Auto-Cleanup:** Deleting a model automatically removes its associated chat history.
 
 ## Installation
@@ -25,7 +27,7 @@
 ### Build from Source
 
 ```bash
-git clone https://github.com/yourusername/vicuna.git
+git clone https://github.com/delfianto/vicuna.git
 cd vicuna
 cargo run --release
 ```
@@ -33,7 +35,9 @@ cargo run --release
 ## Usage
 
 - **Navigation:**
-    - `Tab`: Switch between **Models** and **Chat** tabs.
+    - `Ctrl+A`: Switch to the **Models** tab.
+    - `Ctrl+D`: Switch to the **Chat** tab.
+    - `Tab`: Cycle focus between UI panes (e.g., List vs. Info, Input vs. Sessions).
     - `Ctrl+q`: Quit the application.
 
 ### Models Tab
