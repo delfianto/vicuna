@@ -1,7 +1,9 @@
+use crate::tui::styles;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
+    text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
 };
 use tui_textarea::TextArea;
@@ -14,32 +16,59 @@ pub struct Popup<'a> {
 impl<'a> Popup<'a> {
     pub fn new(title: String) -> Self {
         let mut textarea = TextArea::default();
-        textarea.set_block(Block::default().borders(Borders::ALL).title("Input"));
+        textarea.set_placeholder_text("e.g. llama3.2  or  mistral:7b");
+        textarea.set_cursor_line_style(Style::default());
+        textarea.set_block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(styles::BORDER_FOCUS))
+                .title(Span::styled(" model ", styles::accent_bold())),
+        );
         Self { title, textarea }
     }
 
     pub fn draw(&self, f: &mut Frame, area: Rect) {
-        let block = Block::default()
-            .title(self.title.as_str())
-            .borders(Borders::ALL)
-            .style(Style::default().bg(Color::DarkGray));
+        let area = centered_rect(50, 28, area);
 
-        let area = centered_rect(60, 20, area);
+        // Dim backdrop plate
+        let plate = Block::default()
+            .borders(Borders::ALL)
+            .border_type(ratatui::widgets::BorderType::Rounded)
+            .border_style(Style::default().fg(styles::ACCENT))
+            .style(Style::default().bg(styles::BG_SURFACE))
+            .title(Span::styled(
+                format!(" {} ", self.title.to_lowercase()),
+                styles::accent_bold(),
+            ));
 
         f.render_widget(Clear, area);
-        f.render_widget(block, area);
+        f.render_widget(plate, area);
 
-        let chunks = Layout::default()
+        let inner = Layout::default()
             .direction(Direction::Vertical)
             .margin(1)
-            .constraints([Constraint::Length(3), Constraint::Min(1)].as_ref())
+            .spacing(1)
+            .constraints([
+                Constraint::Length(1),
+                Constraint::Length(3),
+                Constraint::Length(1),
+                Constraint::Min(1),
+            ])
             .split(area);
 
-        f.render_widget(&self.textarea, chunks[0]);
+        let hint = Paragraph::new(Line::from(Span::styled(
+            "name from the ollama library",
+            styles::muted(),
+        )));
+        f.render_widget(hint, inner[0]);
 
-        let help =
-            Paragraph::new("Enter: Submit | Esc: Cancel").style(Style::default().fg(Color::White));
-        f.render_widget(help, chunks[1]);
+        f.render_widget(&self.textarea, inner[1]);
+
+        let help = Paragraph::new(styles::help_line(
+            &[("enter", "pull"), ("esc", "cancel")],
+            inner[2].width.saturating_sub(1),
+        ));
+        f.render_widget(help, inner[2]);
     }
 }
 

@@ -1,6 +1,5 @@
 mod api;
 mod app;
-mod assets;
 mod backend;
 mod config;
 mod db;
@@ -37,8 +36,20 @@ async fn main() -> Result<()> {
         loop {
             tokio::select! {
                 Some(Ok(evt)) = reader.next() => {
-                    if let crossterm::event::Event::Key(key) = evt {
-                        event_tx_input.send(crate::tui::events::Event::Input(key)).await.ok();
+                    match evt {
+                        crossterm::event::Event::Key(key) => {
+                            event_tx_input
+                                .send(crate::tui::events::Event::Input(key))
+                                .await
+                                .ok();
+                        }
+                        crossterm::event::Event::Mouse(mouse) => {
+                            event_tx_input
+                                .send(crate::tui::events::Event::Mouse(mouse))
+                                .await
+                                .ok();
+                        }
+                        _ => {}
                     }
                 }
                 _ = interval.tick() => {

@@ -1,9 +1,10 @@
 use crate::api::types::{Model, ShowModelResponse};
 use crate::db::repo::{Message, Session};
-use crossterm::event::KeyEvent;
+use crossterm::event::{KeyEvent, MouseEvent};
 
 pub enum Event {
     Input(KeyEvent),
+    Mouse(MouseEvent),
     Tick,
     ModelsFetched(Vec<Model>),
     SessionsFetched(Vec<Session>),
@@ -12,6 +13,4 @@ pub enum Event {
     TokenReceived(String),
     GenerationDone,
     Error(String),
-    ImageLoaded(image::DynamicImage),
-    ImageInitialized(Box<dyn ratatui_image::protocol::Protocol>),
 }

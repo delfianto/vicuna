@@ -40,11 +40,15 @@ cargo run --release
 
 ## Usage
 
+Opens on the **Chat** tab (chat-first). Bottom bars are contextual: status shows
+active tab / model / stream state; help only lists keys for the focused pane.
+
 - **Navigation:**
-    - `Ctrl+A`: Switch to the **Models** tab.
-    - `Ctrl+D`: Switch to the **Chat** tab.
-    - `Tab`: Cycle focus between UI panes (e.g., List vs. Info, Input vs. Sessions).
-    - `Ctrl+q`: Quit the application.
+    - `F2`: Open the **Models** library.
+    - `F1`: Back to **Chat**.
+    - `Tab`: Cycle focus between panes (sessions → conversation → composer).
+    - `Esc`: Back — close overlay / close details / leave library → chat / leave insert → conversation → sessions.
+    - `Ctrl+C` twice: Quit (first press cancels a stream if one is running).
 
 ### Models Tab
 
@@ -55,20 +59,13 @@ cargo run --release
 
 ### Chat Tab
 
-- **Pane Navigation:**
-    - `Ctrl+Left` / `Ctrl+Right`: Switch focus between **Session List** and **Input**.
-    - The active pane is highlighted with a **Thick Yellow Border**.
+Focus badge: **LIST** (sessions) · **CHAT** (transcript) · **INS** (composer).
 
-- **Sessions (when focused):**
-    - `j` / `k` (or Arrows): Navigate session history.
-    - `Enter`: Load selected session (and switch to its model).
-    - `d`: Delete selected session.
-    - `Ctrl+n`: Start a new session.
-
-- **Input (when focused):**
-    - Type your message and press `Enter` to send.
-    - `Ctrl+n`: Start a new session.
-    - `PageUp` / `PageDown`: Scroll the chat history.
+- **Insert:** type · `Enter` send · `Esc`/`Tab` leave · `F2` library · `Ctrl+r` regen · `Ctrl+C` cancel / double-quit.
+- **Chat (transcript):** `↑`/`↓` or `j`/`k` scroll · `Tab` cycle · `i` insert · `G` bottom.
+- **Sessions:** `j`/`k` nav · `Enter` open · `F2` library · `m` model picker · `d` delete (confirm).
+- Mouse: wheel scrolls under cursor; click pane/row to focus/select.
+- **Mouse:** wheel scrolls the panel under the cursor; click a session/model row to select; click composer / sessions / conversation to focus.
 
 ## Configuration
 

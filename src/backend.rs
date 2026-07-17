@@ -1,12 +1,12 @@
 use crate::api::client::OllamaClient;
 use crate::api::types::{GenerateRequest, ModelName, SessionId};
 use crate::app::Action;
-use crate::assets::Asset;
 use crate::db::repo::Repository;
 use crate::tui::events::Event;
 use anyhow::Result;
 use futures::StreamExt;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 pub struct Backend {
@@ -15,6 +15,8 @@ pub struct Backend {
     action_rx: Receiver<Action>,
     event_tx: Sender<Event>,
     generation_task: Option<tokio::task::AbortHandle>,
+    /// Bumped on cancel/new generate so in-flight streams stop emitting.
+    generation_seq: Arc<AtomicU64>,
 }
 
 impl Backend {
@@ -30,6 +32,7 @@ impl Backend {
             action_rx,
             event_tx,
             generation_task: None,
+            generation_seq: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -37,17 +40,19 @@ impl Backend {
         while let Some(action) = self.action_rx.recv().await {
             match action {
                 Action::Quit => break,
-                Action::InitImage(w, h) => self.handle_init_image(w, h),
                 Action::FetchModels => self.handle_fetch_models(),
                 Action::FetchSessions => self.handle_fetch_sessions(),
                 Action::ShowModelInfo(name) => self.handle_show_model_info(name),
                 Action::DeleteModel(name) => self.handle_delete_model(name),
                 Action::PullModel(name) => self.handle_pull_model(name),
                 Action::Generate(prompt, model) => self.handle_generate(prompt, model),
+                Action::CancelGeneration => self.handle_cancel_generation(),
+                Action::DeleteLastAssistant(id) => self.handle_delete_last_assistant(id),
                 Action::LoadSession(id) => self.handle_load_session(id),
                 Action::CreateSession(id, title, model) => {
                     self.handle_create_session(id, title, model)
                 }
+                Action::RenameSession(id, title) => self.handle_rename_session(id, title),
                 Action::DeleteSession(id) => self.handle_delete_session(id),
                 Action::SaveMessage(id, role, content) => {
                     self.handle_save_message(id, role, content)
@@ -55,31 +60,6 @@ impl Backend {
             }
         }
         Ok(())
-    }
-
-    fn handle_init_image(&self, w: u16, h: u16) {
-        let event_tx = self.event_tx.clone();
-
-        tokio::task::spawn_blocking(move || {
-            let Some(file) = Asset::get("vicuna-logo.png") else {
-                tracing::warn!("Asset 'vicuna-logo.png' not found");
-                return;
-            };
-
-            let Ok(img) = image::load_from_memory(&file.data) else {
-                tracing::error!("Failed to decode vicuna-logo.png");
-                return;
-            };
-
-            let fixed = img.resize_exact(w as u32, h as u32, image::imageops::FilterType::Lanczos3);
-
-            let rt = tokio::runtime::Handle::current();
-            rt.block_on(async {
-                if let Err(e) = event_tx.send(Event::ImageLoaded(fixed)).await {
-                    tracing::error!("Failed to send image event: {}", e);
-                }
-            });
-        });
     }
 
     fn handle_fetch_models(&self) {
@@ -147,9 +127,13 @@ impl Backend {
                     if let Err(e) = crate::db::repo::delete_model_cascade(&repo.conn, &name).await {
                         tracing::error!("DB Cascade delete failed: {}", e);
                     }
-                    tx.send(Event::Error(format!("Model {} deleted", name.0)))
-                        .await
-                        .ok();
+                    // Refresh both lists — cascade removes related sessions.
+                    if let Ok(res) = client.list_models().await {
+                        tx.send(Event::ModelsFetched(res.models)).await.ok();
+                    }
+                    if let Ok(sessions) = crate::db::repo::get_sessions(&repo.conn).await {
+                        tx.send(Event::SessionsFetched(sessions)).await.ok();
+                    }
                 }
                 Ok(false) => {
                     tx.send(Event::Error(format!(
@@ -201,11 +185,33 @@ impl Backend {
         });
     }
 
+    fn handle_cancel_generation(&mut self) {
+        self.generation_seq.fetch_add(1, Ordering::SeqCst);
+        if let Some(handle) = self.generation_task.take() {
+            handle.abort();
+        }
+        let tx = self.event_tx.clone();
+        tokio::spawn(async move {
+            tx.send(Event::GenerationDone).await.ok();
+        });
+    }
+
+    fn handle_delete_last_assistant(&self, id: SessionId) {
+        let repo = self.repo.clone();
+        tokio::spawn(async move {
+            if let Err(e) = crate::db::repo::delete_last_assistant(&repo.conn, &id).await {
+                tracing::error!("Delete last assistant failed: {}", e);
+            }
+        });
+    }
+
     fn handle_generate(&mut self, prompt: String, model: ModelName) {
         if let Some(handle) = self.generation_task.take() {
             handle.abort();
         }
 
+        let my_seq = self.generation_seq.fetch_add(1, Ordering::SeqCst) + 1;
+        let seq = Arc::clone(&self.generation_seq);
         let client = self.client.clone();
         let tx = self.event_tx.clone();
 
@@ -217,22 +223,38 @@ impl Backend {
         };
 
         let handle = tokio::spawn(async move {
+            let still_current = || seq.load(Ordering::SeqCst) == my_seq;
             let mut stream = Box::pin(client.generate_stream(req));
             while let Some(res) = stream.next().await {
+                if !still_current() {
+                    break;
+                }
                 match res {
                     Ok(resp) => {
-                        tx.send(Event::TokenReceived(resp.response)).await.ok();
+                        if !resp.response.is_empty() {
+                            tx.send(Event::TokenReceived(resp.response)).await.ok();
+                        }
                         if resp.done {
-                            tx.send(Event::GenerationDone).await.ok();
+                            if still_current() {
+                                tx.send(Event::GenerationDone).await.ok();
+                            }
+                            return;
                         }
                     }
                     Err(e) => {
-                        tx.send(Event::Error(format!("Generation error: {}", e)))
-                            .await
-                            .ok();
-                        tx.send(Event::GenerationDone).await.ok();
+                        if still_current() {
+                            tx.send(Event::Error(format!("Generation error: {}", e)))
+                                .await
+                                .ok();
+                            tx.send(Event::GenerationDone).await.ok();
+                        }
+                        return;
                     }
                 }
+            }
+            // Stream ended without done (disconnect / abort race).
+            if still_current() {
+                tx.send(Event::GenerationDone).await.ok();
             }
         });
 
@@ -284,6 +306,26 @@ impl Backend {
                 tx.send(Event::Error(format!("Create session failed: {}", e)))
                     .await
                     .ok();
+                return;
+            }
+            // Refresh left list so the new session is durable after optimistic insert.
+            if let Ok(sessions) = crate::db::repo::get_sessions(&repo.conn).await {
+                tx.send(Event::SessionsFetched(sessions)).await.ok();
+            }
+        });
+    }
+
+    fn handle_rename_session(&self, id: SessionId, title: String) {
+        let repo = self.repo.clone();
+        let tx = self.event_tx.clone();
+
+        tokio::spawn(async move {
+            if let Err(e) = crate::db::repo::rename_session(&repo.conn, &id, &title).await {
+                tracing::error!("Rename session failed: {}", e);
+                return;
+            }
+            if let Ok(sessions) = crate::db::repo::get_sessions(&repo.conn).await {
+                tx.send(Event::SessionsFetched(sessions)).await.ok();
             }
         });
     }
@@ -297,6 +339,10 @@ impl Backend {
                 tx.send(Event::Error(format!("Delete session failed: {}", e)))
                     .await
                     .ok();
+                return;
+            }
+            if let Ok(sessions) = crate::db::repo::get_sessions(&repo.conn).await {
+                tx.send(Event::SessionsFetched(sessions)).await.ok();
             }
         });
     }

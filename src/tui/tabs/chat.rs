@@ -4,63 +4,19 @@ use crate::tui::styles;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
-    widgets::{Block, BorderType, Borders, List, ListItem},
+    style::{Modifier, Style},
+    text::{Line, Span},
+    widgets::{List, ListItem, Paragraph},
 };
 
-pub fn draw(f: &mut Frame, app: &App, area: Rect) {
-    let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(20), Constraint::Percentage(80)].as_ref())
-        .split(area);
-
-    let sessions: Vec<ListItem> = app
-        .sessions
-        .iter()
-        .enumerate()
-        .map(|(i, session)| {
-            let display_title = if session.title.is_empty() {
-                "Untitled"
-            } else {
-                &session.title
-            };
-            let display = format!("{} [{}]", display_title, session.model);
-            ListItem::new(display).style(styles::get_rainbow_style(i))
-        })
-        .collect();
-
-    let (session_border_style, session_border_type) = if app.chat_focus == ChatFocus::Sessions {
-        (
-            Style::default()
-                .fg(Color::LightYellow)
-                .add_modifier(Modifier::BOLD),
-            BorderType::Thick,
-        )
-    } else {
-        (Style::default().fg(Color::DarkGray), BorderType::Plain)
-    };
-
-    let sessions_list = List::new(sessions)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(session_border_type)
-                .title(" Sessions ")
-                .border_style(session_border_style),
-        )
-        .highlight_style(
-            Style::default()
-                .bg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol(" ➤ ");
-
-    let mut state = ratatui::widgets::ListState::default();
-    state.select(Some(app.selected_session_index));
-
-    f.render_stateful_widget(sessions_list, chunks[0], &mut state);
-
-    let estimated_width = chunks[1].width.saturating_sub(4).max(1);
+pub fn draw(f: &mut Frame, app: &mut App, area: Rect) {
+    // Full-width composer under a side-by-side top row so bottom edges align:
+    //   ┌ sessions ┬ conversation ┐
+    //   │          │              │
+    //   ├──────────┴──────────────┤
+    //   │ composer                │
+    //   └─────────────────────────┘
+    let estimated_width = area.width.saturating_sub(6).max(1);
     let mut visual_input_lines: u16 = 0;
     for line in app.input.lines() {
         let s: &str = line.as_str();
@@ -71,75 +27,189 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
             visual_input_lines += len.div_ceil(estimated_width);
         }
     }
-    let input_height = (visual_input_lines + 2).clamp(3, 15);
+    let input_height = (visual_input_lines + 3).clamp(4, 12);
 
-    let chat_chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(input_height)].as_ref())
-        .split(chunks[1]);
+    let (top_area, input_area) =
+        styles::split_vertical(area, Constraint::Min(1), Constraint::Length(input_height));
 
-    let messages_area = chat_chunks[0];
-    let input_area = chat_chunks[1];
+    let (sessions_area, messages_area) =
+        styles::split_horizontal(top_area, Constraint::Length(28), Constraint::Min(20));
+
+    app.hits.sessions = Some(sessions_area);
+    app.hits.messages = Some(messages_area);
+    app.hits.composer = Some(input_area);
+    app.hits.models_list = None;
+    app.hits.models_info = None;
+
+    draw_sessions(f, app, sessions_area);
 
     if app.messages.is_empty() {
+        app.chat_max_scroll = 0;
+        if app.chat_follow {
+            app.chat_scroll = 0;
+        }
         draw_empty_chat(f, app, messages_area);
     } else {
-        let model_name = app
-            .models
-            .get(app.selected_model_index)
-            .map(|m| m.name.clone())
-            .unwrap_or_else(|| "Unknown".to_string());
-
-        let history_md = app
-            .messages
-            .iter()
-            .map(|m| format!("**{}**:\n{}", m.role.to_uppercase(), m.content))
-            .collect::<Vec<_>>()
-            .join("\n\n---\n\n");
-
-        let chat_title = format!(" Chat with {} ", model_name);
-
-        let chat_border_color = styles::RAINBOW[app.selected_model_index % styles::RAINBOW.len()];
-
-        let viewer = MarkdownViewer::new(&history_md)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded)
-                    .title(ratatui::text::Span::styled(
-                        chat_title,
-                        Style::default()
-                            .fg(chat_border_color)
-                            .add_modifier(Modifier::BOLD),
-                    ))
-                    .border_style(Style::default().fg(chat_border_color)),
-            )
-            .scroll(app.chat_scroll);
-
-        f.render_widget(viewer, messages_area);
+        draw_messages(f, app, messages_area);
     }
 
-    let (input_border_style, input_border_type) = if app.chat_focus == ChatFocus::Input {
-        (
-            Style::default()
-                .fg(Color::LightYellow)
-                .add_modifier(Modifier::BOLD),
-            BorderType::Thick,
-        )
+    draw_composer(f, app, input_area, visual_input_lines, input_height);
+}
+
+fn draw_sessions(f: &mut Frame, app: &App, area: Rect) {
+    let focused = app.chat_focus == ChatFocus::Sessions;
+
+    let sessions: Vec<ListItem> = if app.sessions.is_empty() {
+        vec![ListItem::new(Line::from(Span::styled(
+            "  no sessions yet",
+            styles::muted().add_modifier(Modifier::ITALIC),
+        )))]
     } else {
-        (Style::default().fg(Color::DarkGray), BorderType::Plain)
+        app.sessions
+            .iter()
+            .map(|session| {
+                let title = if session.title.is_empty() {
+                    "untitled"
+                } else {
+                    session.title.as_str()
+                };
+                let line = Line::from(vec![
+                    Span::styled(format!("{title}  "), styles::text()),
+                    Span::styled(truncate_model(&session.model.0, 14), styles::dim()),
+                ]);
+                ListItem::new(line)
+            })
+            .collect()
+    };
+
+    let count = app.sessions.len();
+    let title = if count == 0 {
+        "sessions".to_string()
+    } else {
+        format!("sessions · {count}")
+    };
+
+    let sessions_list = List::new(sessions)
+        .block(styles::pane_block(title, focused))
+        .highlight_style(styles::HIGHLIGHT_STYLE)
+        .highlight_symbol("▎ ");
+
+    let mut state = ratatui::widgets::ListState::default();
+    if !app.sessions.is_empty() {
+        state.select(Some(app.selected_session_index));
+    }
+
+    f.render_stateful_widget(sessions_list, area, &mut state);
+}
+
+fn draw_messages(f: &mut Frame, app: &mut App, area: Rect) {
+    let model_name = app
+        .models
+        .get(app.selected_model_index)
+        .map(|m| m.name.as_str())
+        .unwrap_or("?")
+        .to_string();
+
+    let history_md = format_transcript(&app.messages, app.is_generating);
+
+    let focused = app.chat_focus == ChatFocus::Conversation;
+    let title = if app.is_generating {
+        format!(
+            "conversation · {model_name} · {} streaming",
+            app.spinner_glyph()
+        )
+    } else if focused {
+        format!("conversation · {model_name} · ↑↓ scroll")
+    } else {
+        format!("conversation · {model_name}")
+    };
+
+    let block = styles::pane_block(title, focused);
+    let inner = block.inner(area);
+
+    // Keep scroll state aligned with what the viewer will actually use.
+    let max_scroll =
+        MarkdownViewer::max_scroll_for(&history_md, inner.width, inner.height);
+    app.chat_max_scroll = max_scroll;
+    if app.chat_follow {
+        app.chat_scroll = max_scroll;
+    } else {
+        app.chat_scroll = app.chat_scroll.min(max_scroll);
+    }
+
+    let viewer = MarkdownViewer::new(&history_md)
+        .block(block)
+        .scroll(app.chat_scroll)
+        .follow(app.chat_follow);
+
+    f.render_widget(viewer, area);
+}
+
+/// Build markdown that `tui-markdown` can render cleanly (roles, body, code fences).
+fn format_transcript(messages: &[crate::db::repo::Message], is_generating: bool) -> String {
+    let mut out = String::new();
+    for (i, m) in messages.iter().enumerate() {
+        if i > 0 {
+            out.push_str("\n\n---\n\n");
+        }
+        let label = styles::role_label(&m.role);
+        // h3 keeps role labels distinct without eating half the pane like h1.
+        out.push_str(&format!("### {label}\n\n"));
+        // Normalize content: ensure fenced code blocks have blank lines around them
+        // when models forget, so the parser doesn't swallow following prose.
+        out.push_str(&normalize_md_body(m.content.trim_end()));
+        if is_generating && i + 1 == messages.len() && m.role == "assistant" {
+            out.push_str(" ▍");
+        }
+    }
+    out
+}
+
+fn normalize_md_body(content: &str) -> String {
+    // Light touch: collapse 3+ blank lines, keep code fences intact.
+    let mut result = String::with_capacity(content.len());
+    let mut blank_run = 0u8;
+    for line in content.lines() {
+        if line.trim().is_empty() {
+            blank_run = blank_run.saturating_add(1);
+            if blank_run <= 2 {
+                result.push('\n');
+            }
+        } else {
+            blank_run = 0;
+            result.push_str(line);
+            result.push('\n');
+        }
+    }
+    // Trim trailing newline added by loop if original had none? Prefer stable trailing \n.
+    result
+}
+
+fn draw_composer(
+    f: &mut Frame,
+    app: &App,
+    area: Rect,
+    visual_input_lines: u16,
+    input_height: u16,
+) {
+    let focused = app.chat_focus == ChatFocus::Input;
+
+    let title = if app.is_generating {
+        format!(
+            "composer · {} generating · ^c cancel",
+            app.spinner_glyph()
+        )
+    } else if focused {
+        "composer · enter send · tab cycle · esc back".to_string()
+    } else {
+        "composer · i / tab to focus".to_string()
     };
 
     let mut input = app.input.clone();
-    input.set_block(
-        ratatui::widgets::Block::default()
-            .borders(Borders::ALL)
-            .border_type(input_border_type)
-            .title(" Input ")
-            .border_style(input_border_style),
-    );
+    input.set_block(styles::pane_block(title, focused));
+    input.set_cursor_line_style(Style::default());
 
-    f.render_widget(&input, input_area);
+    f.render_widget(&input, area);
 
     if visual_input_lines > input_height.saturating_sub(2) {
         let scrollbar =
@@ -151,7 +221,7 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
                 .position(app.input.cursor().0);
         f.render_stateful_widget(
             scrollbar,
-            input_area.inner(ratatui::layout::Margin {
+            area.inner(ratatui::layout::Margin {
                 vertical: 1,
                 horizontal: 0,
             }),
@@ -160,65 +230,85 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
     }
 }
 
-fn draw_empty_chat(f: &mut ratatui::Frame, app: &App, area: Rect) {
+fn draw_empty_chat(f: &mut Frame, app: &App, area: Rect) {
     let model_name = app
         .models
         .get(app.selected_model_index)
         .map(|m| m.name.clone())
-        .unwrap_or_else(|| "Unknown".to_string());
+        .unwrap_or_else(|| "no model selected".to_string());
 
-    let chat_border_color = styles::RAINBOW[app.selected_model_index % styles::RAINBOW.len()];
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .title(ratatui::text::Span::styled(
-            format!(" New Chat with {} ", model_name),
-            Style::default()
-                .fg(chat_border_color)
-                .add_modifier(Modifier::BOLD),
-        ))
-        .border_style(Style::default().fg(chat_border_color));
-
-    let inner_area = block.inner(area);
+    let block = styles::pane_block(format!("conversation · {model_name}"), false);
+    let inner = block.inner(area);
     f.render_widget(block, area);
 
-    let center_layout = Layout::default()
+    // Compact alpaca / vicuna-ish glyph — no image protocol noise.
+    let art = [
+        r"      .--.  ",
+        r"     / .. \/ ",
+        r"    ( \  / / ",
+        r"     \ \/ /  ",
+        r"   __|  | /  ",
+        r"  /   \_/|   ",
+        r"  \  /  \|   ",
+        r"   \/ /\  \  ",
+        r"    / /  \ | ",
+        r"   / /   | | ",
+    ];
+
+    let mut lines: Vec<Line> = Vec::new();
+    if inner.height >= 14 {
+        for row in art {
+            lines.push(Line::from(Span::styled(
+                row.to_string(),
+                styles::accent().add_modifier(Modifier::DIM),
+            )));
+        }
+        lines.push(Line::from(""));
+    }
+
+    lines.push(Line::from(Span::styled(
+        "start a conversation",
+        styles::accent_bold(),
+    )));
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::styled("type below · ", styles::muted()),
+        Span::styled(model_name, styles::accent_bold()),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled(" esc ", styles::key_cap()),
+        Span::styled(" back  ", styles::key_desc()),
+        Span::styled(" m ", styles::key_cap()),
+        Span::styled(" model  ", styles::key_desc()),
+        Span::styled(" f2 ", styles::key_cap()),
+        Span::styled(" library", styles::key_desc()),
+    ]));
+
+    let body_h = lines.len() as u16;
+    let center = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Min(1),
-            Constraint::Length(20),
-            Constraint::Length(2),
+            Constraint::Length(body_h.min(inner.height)),
             Constraint::Min(1),
         ])
-        .split(inner_area);
+        .split(inner);
 
-    if let Some(logo) = &app.logo {
-        let image_area = center_layout[1];
-        let image_width = 60;
-        let horizontal_layout = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage((100 - (image_width * 100 / inner_area.width.max(1))) / 2),
-                Constraint::Length(image_width),
-                Constraint::Percentage((100 - (image_width * 100 / inner_area.width.max(1))) / 2),
-            ])
-            .split(image_area);
+    f.render_widget(
+        Paragraph::new(lines).alignment(ratatui::layout::HorizontalAlignment::Center),
+        center[1],
+    );
+}
 
-        let image_widget = ratatui_image::Image::new(logo.as_ref());
-        f.render_widget(image_widget, horizontal_layout[1]);
+fn truncate_model(name: &str, max: usize) -> String {
+    let chars: Vec<char> = name.chars().collect();
+    if chars.len() <= max {
+        name.to_string()
+    } else if max <= 1 {
+        "…".to_string()
+    } else {
+        let mut s: String = chars.into_iter().take(max.saturating_sub(1)).collect();
+        s.push('…');
+        s
     }
-
-    let instructions = ratatui::text::Line::from(vec![
-        ratatui::text::Span::raw("Type a message to start chatting with "),
-        ratatui::text::Span::styled(
-            &model_name,
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        ),
-    ]);
-
-    let inst_p = ratatui::widgets::Paragraph::new(instructions)
-        .alignment(ratatui::layout::Alignment::Center);
-    f.render_widget(inst_p, center_layout[2]);
 }
