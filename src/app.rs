@@ -126,7 +126,7 @@ impl App {
                 });
             }
             SortColumn::Size => {
-                self.models.sort_by(|a, b| a.size.cmp(&b.size));
+                self.models.sort_by_key(|a| a.size);
             }
             SortColumn::Modified => {
                 self.models
