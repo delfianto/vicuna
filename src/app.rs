@@ -8,7 +8,6 @@ use crossterm::event::{
     KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 use ratatui::layout::Rect;
-use std::cell::Cell;
 use uuid::Uuid;
 
 /// Last-frame hit regions for mouse (filled during draw).
@@ -95,9 +94,13 @@ pub struct App {
     pub selected_model_index: usize,
     pub sort_column: SortColumn,
 
+    /// Right-side inspect pane open in the models library.
     pub show_info: bool,
     pub model_info: Option<crate::api::types::ShowModelResponse>,
-    pub info_scroll: Cell<u16>,
+    /// Name the inspect payload belongs to (detect stale cache on selection change).
+    pub model_info_for: Option<String>,
+    pub info_scroll: u16,
+    pub info_max_scroll: u16,
 
     pub input: tui_textarea::TextArea<'static>,
     pub messages: Vec<crate::db::repo::Message>,
@@ -150,7 +153,9 @@ impl App {
             sort_column: SortColumn::Name,
             show_info: false,
             model_info: None,
-            info_scroll: Cell::new(0),
+            model_info_for: None,
+            info_scroll: 0,
+            info_max_scroll: 0,
             input,
             messages: Vec::new(),
             is_generating: false,
@@ -368,7 +373,66 @@ impl App {
         });
     }
 
-    /// Esc “pop” navigation: overlay → close details → leave library → leave insert.
+    pub fn close_inspect(&mut self) {
+        self.show_info = false;
+        self.models_focus = ModelsFocus::List;
+        self.info_scroll = 0;
+    }
+
+    /// Open/close the right-hand model inspect pane (F3).
+    pub fn toggle_inspect(&mut self) -> Vec<Action> {
+        if self.current_tab != CurrentTab::Models {
+            self.current_tab = CurrentTab::Models;
+        }
+        if self.show_info {
+            self.close_inspect();
+            return vec![];
+        }
+        self.open_inspect()
+    }
+
+    pub fn open_inspect(&mut self) -> Vec<Action> {
+        let Some(model) = self.models.get(self.selected_model_index) else {
+            return vec![];
+        };
+        let name = model.name.clone();
+        self.show_info = true;
+        self.info_scroll = 0;
+        self.models_focus = ModelsFocus::Info;
+        if self.model_info_for.as_deref() != Some(name.as_str()) {
+            self.model_info = None;
+            self.model_info_for = Some(name.clone());
+        }
+        vec![Action::ShowModelInfo(ModelName(name))]
+    }
+
+    fn refresh_inspect_if_open(&mut self) -> Vec<Action> {
+        if !self.show_info {
+            return vec![];
+        }
+        let Some(model) = self.models.get(self.selected_model_index) else {
+            return vec![];
+        };
+        let name = model.name.clone();
+        self.info_scroll = 0;
+        if self.model_info_for.as_deref() != Some(name.as_str()) {
+            self.model_info = None;
+            self.model_info_for = Some(name.clone());
+        }
+        self.models_focus = ModelsFocus::Info;
+        vec![Action::ShowModelInfo(ModelName(name))]
+    }
+
+    pub fn scroll_info_up(&mut self, step: u16) {
+        self.info_scroll = self.info_scroll.saturating_sub(step);
+    }
+
+    pub fn scroll_info_down(&mut self, step: u16) {
+        let next = self.info_scroll.saturating_add(step);
+        self.info_scroll = next.min(self.info_max_scroll);
+    }
+
+    /// Esc “pop” navigation: overlay → close inspect → leave library → leave insert.
     fn navigate_back(&mut self) -> Vec<Action> {
         self.quit_armed = false;
         if self.confirm.is_some() {
@@ -386,8 +450,7 @@ impl App {
         match self.current_tab {
             CurrentTab::Models => {
                 if self.show_info {
-                    self.show_info = false;
-                    self.models_focus = ModelsFocus::List;
+                    self.close_inspect();
                 } else {
                     // Leave library → chat composer.
                     self.current_tab = CurrentTab::Chat;
@@ -453,12 +516,11 @@ impl App {
                         self.scroll_chat_down(step);
                     }
                 } else if UiHits::contains(self.hits.models_info, col, row) {
-                    let cur = self.info_scroll.get();
-                    self.info_scroll.set(if up {
-                        cur.saturating_sub(step)
+                    if up {
+                        self.scroll_info_up(step);
                     } else {
-                        cur.saturating_add(step)
-                    });
+                        self.scroll_info_down(step);
+                    }
                 } else if UiHits::contains(self.hits.sessions, col, row) && !self.sessions.is_empty()
                 {
                     if up {
@@ -585,6 +647,8 @@ impl App {
                 self.enter_insert();
                 vec![]
             }
+            // Inspect selected model (library pane) — toggle open/close.
+            KeyCode::F(3) => self.toggle_inspect(),
             _ => match self.current_tab {
                 CurrentTab::Models => self.on_key_models(key),
                 CurrentTab::Chat => self.on_key_chat(key),
@@ -593,7 +657,6 @@ impl App {
     }
 
     /// Cycle focus between panes on the current screen.
-    /// Chat: sessions ↔ composer. Models: list ↔ details (opens details if closed).
     fn cycle_panel_focus(&mut self, _reverse: bool) -> Vec<Action> {
         match self.current_tab {
             CurrentTab::Chat => {
@@ -612,14 +675,9 @@ impl App {
                         ModelsFocus::Info => ModelsFocus::List,
                     };
                     vec![]
-                } else if let Some(model) = self.models.get(self.selected_model_index) {
-                    // Open details so there is a second pane to focus.
-                    self.show_info = true;
-                    self.info_scroll.set(0);
-                    self.models_focus = ModelsFocus::Info;
-                    vec![Action::ShowModelInfo(ModelName(model.name.clone()))]
                 } else {
-                    vec![]
+                    // Open inspect so Tab has a second pane.
+                    self.open_inspect()
                 }
             }
         }
@@ -980,33 +1038,29 @@ impl App {
     }
 
     fn on_key_models(&mut self, key: KeyEvent) -> Vec<Action> {
-        if self.show_info {
+        // When inspect pane is focused, arrows/pg scroll the inspector.
+        if self.show_info && self.models_focus == ModelsFocus::Info {
             match key.code {
-                KeyCode::Char('i') => {
-                    self.show_info = false;
-                    self.models_focus = ModelsFocus::List;
-                    return vec![];
+                KeyCode::Char('i') | KeyCode::F(3) => {
+                    return self.toggle_inspect();
                 }
                 KeyCode::PageUp => {
-                    self.info_scroll
-                        .set(self.info_scroll.get().saturating_sub(15));
+                    self.scroll_info_up(15);
                     return vec![];
                 }
                 KeyCode::PageDown => {
-                    self.info_scroll
-                        .set(self.info_scroll.get().saturating_add(15));
+                    self.scroll_info_down(15);
                     return vec![];
                 }
-                KeyCode::Up if self.models_focus == ModelsFocus::Info => {
-                    self.info_scroll
-                        .set(self.info_scroll.get().saturating_sub(3));
+                KeyCode::Up | KeyCode::Char('k') => {
+                    self.scroll_info_up(3);
                     return vec![];
                 }
-                KeyCode::Down if self.models_focus == ModelsFocus::Info => {
-                    self.info_scroll
-                        .set(self.info_scroll.get().saturating_add(3));
+                KeyCode::Down | KeyCode::Char('j') => {
+                    self.scroll_info_down(3);
                     return vec![];
                 }
+                // Still allow list nav with capital J/K? Keep simple: only scroll here.
                 _ => {}
             }
         }
@@ -1015,22 +1069,14 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => {
                 if !self.models.is_empty() && self.selected_model_index < self.models.len() - 1 {
                     self.selected_model_index += 1;
-                    if self.show_info
-                        && let Some(model) = self.models.get(self.selected_model_index)
-                    {
-                        return vec![Action::ShowModelInfo(ModelName(model.name.clone()))];
-                    }
+                    return self.refresh_inspect_if_open();
                 }
                 vec![]
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 if self.selected_model_index > 0 {
                     self.selected_model_index -= 1;
-                    if self.show_info
-                        && let Some(model) = self.models.get(self.selected_model_index)
-                    {
-                        return vec![Action::ShowModelInfo(ModelName(model.name.clone()))];
-                    }
+                    return self.refresh_inspect_if_open();
                 }
                 vec![]
             }
@@ -1048,16 +1094,8 @@ impl App {
                 self.open_model_picker();
                 vec![]
             }
-            KeyCode::Char('i') => {
-                if let Some(model) = self.models.get(self.selected_model_index) {
-                    self.show_info = true;
-                    self.info_scroll.set(0);
-                    self.models_focus = ModelsFocus::Info;
-                    vec![Action::ShowModelInfo(ModelName(model.name.clone()))]
-                } else {
-                    vec![]
-                }
-            }
+            // `i` / F3 — inspect toggle (open focuses the pane).
+            KeyCode::Char('i') => self.toggle_inspect(),
             KeyCode::Char('s') => {
                 self.sort_column = match self.sort_column {
                     SortColumn::Name => SortColumn::Size,
@@ -1068,11 +1106,11 @@ impl App {
                 vec![]
             }
             KeyCode::Enter => {
+                self.close_inspect();
                 self.current_tab = CurrentTab::Chat;
                 self.messages.clear();
                 self.current_session_id = None;
-                self.chat_scroll = 0;
-                self.models_focus = ModelsFocus::List;
+                self.stick_chat_bottom();
                 self.enter_insert();
                 vec![]
             }
@@ -1211,6 +1249,39 @@ mod tests {
         assert_eq!(app.models_focus, ModelsFocus::Info);
         app.on_key(mock_key(KeyCode::Tab));
         assert_eq!(app.models_focus, ModelsFocus::List);
+    }
+
+    #[test]
+    fn test_f3_toggles_inspect() {
+        let config = Config {
+            _config_dir: "/tmp".into(),
+            _data_dir: "/tmp".into(),
+            log_dir: "/tmp".into(),
+            db_path: "/tmp/test.db".into(),
+            ollama_url: "http://localhost:11434".into(),
+        };
+        let mut app = App::new(config);
+        app.models = vec![Model {
+            name: "llama3".into(),
+            modified_at: String::new(),
+            size: 1,
+            digest: String::new(),
+            details: None,
+        }];
+        app.current_tab = CurrentTab::Models;
+        let actions = app.on_key(mock_key(KeyCode::F(3)));
+        assert!(app.show_info);
+        assert_eq!(app.models_focus, ModelsFocus::Info);
+        assert!(matches!(actions.first(), Some(Action::ShowModelInfo(_))));
+
+        app.on_key(mock_key(KeyCode::F(3)));
+        assert!(!app.show_info);
+        assert_eq!(app.models_focus, ModelsFocus::List);
+
+        app.on_key(mock_key(KeyCode::F(3)));
+        assert!(app.show_info);
+        app.on_key(mock_key(KeyCode::Esc));
+        assert!(!app.show_info);
     }
 
     #[test]

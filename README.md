@@ -50,12 +50,13 @@ active tab / model / stream state; help only lists keys for the focused pane.
     - `Esc`: Back — close overlay / close details / leave library → chat / leave insert → conversation → sessions.
     - `Ctrl+C` twice: Quit (first press cancels a stream if one is running).
 
-### Models Tab
+### Models Tab (library · `F2`)
 
-- `j` / `k` (or Arrows): Navigate the model list.
-- `Enter`: Select model and start a new chat.
-- `p`: Pull a new model (opens a popup to enter model name, e.g., `llama3`).
-- `d`: Delete the selected model.
+- `j` / `k`: Navigate the model list.
+- `F3` / `i`: **Inspect** selected model (right pane: summary, parameters, template, modelfile, license). Toggle again or `Esc` to close.
+- `Tab`: Focus list ↔ inspect (opens inspect if closed).
+- `Enter`: Use model and start a new chat.
+- `p`: Pull a model · `d`: Delete (confirm) · `s`: Sort.
 
 ### Chat Tab
 
