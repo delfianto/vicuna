@@ -15,11 +15,8 @@ use ratatui::{
 
 pub fn draw(f: &mut Frame, app: &mut App, area: Rect) {
     let table_area = if app.show_info {
-        let (table_area, info_area) = styles::split_horizontal(
-            area,
-            Constraint::Percentage(52),
-            Constraint::Percentage(48),
-        );
+        let (table_area, info_area) =
+            styles::split_horizontal(area, Constraint::Percentage(52), Constraint::Percentage(48));
         app.hits.models_info = Some(info_area);
         draw_inspect_pane(f, app, info_area);
         table_area
@@ -64,7 +61,11 @@ fn draw_table(f: &mut Frame, app: &App, table_area: Rect) {
         Cell::from("vram≈").style(styles::muted().add_modifier(Modifier::BOLD)),
     ];
     if !app.show_info {
-        header_cells.push(header_cell("modified", SortColumn::Modified, app.sort_column));
+        header_cells.push(header_cell(
+            "modified",
+            SortColumn::Modified,
+            app.sort_column,
+        ));
     }
     let header = Row::new(header_cells).height(1).bottom_margin(0);
 
@@ -225,10 +226,7 @@ fn draw_inspect_pane(f: &mut Frame, app: &mut App, area: Rect) {
     f.render_widget(viewer, area);
 }
 
-fn format_inspect(
-    model: Option<&crate::api::types::Model>,
-    info: &ShowModelResponse,
-) -> String {
+fn format_inspect(model: Option<&crate::api::types::Model>, info: &ShowModelResponse) -> String {
     let mut out = String::new();
 
     out.push_str("## summary\n\n");
@@ -253,10 +251,10 @@ fn format_inspect(
         out.push_str(&format!("**params**  {}\n", d.parameter_size));
         out.push_str(&format!("**quant**  {}\n", d.quantization_level));
         out.push_str(&format!("**format**  {}\n", d.format));
-        if let Some(ref fams) = d.families {
-            if !fams.is_empty() {
-                out.push_str(&format!("**families**  {}\n", fams.join(", ")));
-            }
+        if let Some(ref fams) = d.families
+            && !fams.is_empty()
+        {
+            out.push_str(&format!("**families**  {}\n", fams.join(", ")));
         }
     }
 

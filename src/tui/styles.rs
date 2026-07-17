@@ -89,7 +89,9 @@ pub fn pane_block<'a>(title: impl Into<String>, focused: bool) -> Block<'a> {
     let title = title.into();
     let (border_style, border_type) = if focused {
         (
-            Style::default().fg(BORDER_FOCUS).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(BORDER_FOCUS)
+                .add_modifier(Modifier::BOLD),
             BorderType::Thick,
         )
     } else {

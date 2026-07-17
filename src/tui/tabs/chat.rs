@@ -128,8 +128,7 @@ fn draw_messages(f: &mut Frame, app: &mut App, area: Rect) {
     let inner = block.inner(area);
 
     // Keep scroll state aligned with what the viewer will actually use.
-    let max_scroll =
-        MarkdownViewer::max_scroll_for(&history_md, inner.width, inner.height);
+    let max_scroll = MarkdownViewer::max_scroll_for(&history_md, inner.width, inner.height);
     app.chat_max_scroll = max_scroll;
     if app.chat_follow {
         app.chat_scroll = max_scroll;
@@ -185,20 +184,11 @@ fn normalize_md_body(content: &str) -> String {
     result
 }
 
-fn draw_composer(
-    f: &mut Frame,
-    app: &App,
-    area: Rect,
-    visual_input_lines: u16,
-    input_height: u16,
-) {
+fn draw_composer(f: &mut Frame, app: &App, area: Rect, visual_input_lines: u16, input_height: u16) {
     let focused = app.chat_focus == ChatFocus::Input;
 
     let title = if app.is_generating {
-        format!(
-            "composer · {} generating · ^c cancel",
-            app.spinner_glyph()
-        )
+        format!("composer · {} generating · ^c cancel", app.spinner_glyph())
     } else if focused {
         "composer · enter send · tab cycle · esc back".to_string()
     } else {
@@ -219,10 +209,15 @@ fn draw_composer(
             ratatui::widgets::Scrollbar::new(ratatui::widgets::ScrollbarOrientation::VerticalRight)
                 .begin_symbol(Some("▲"))
                 .end_symbol(Some("▼"));
-        let cursor_row = app.input.cursor().0.min(visual_input_lines.saturating_sub(1) as usize);
-        let mut scrollbar_state = ratatui::widgets::ScrollbarState::new(visual_input_lines as usize)
-            .position(cursor_row)
-            .viewport_content_length(viewport_h as usize);
+        let cursor_row = app
+            .input
+            .cursor()
+            .0
+            .min(visual_input_lines.saturating_sub(1) as usize);
+        let mut scrollbar_state =
+            ratatui::widgets::ScrollbarState::new(visual_input_lines as usize)
+                .position(cursor_row)
+                .viewport_content_length(viewport_h as usize);
         f.render_stateful_widget(
             scrollbar,
             area.inner(ratatui::layout::Margin {

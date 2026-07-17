@@ -14,9 +14,7 @@ impl StyleSheet for VicunaMarkdownStyle {
             1 => Style::new()
                 .fg(styles::ACCENT)
                 .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
-            2 => Style::new()
-                .fg(styles::ACCENT)
-                .add_modifier(Modifier::BOLD),
+            2 => Style::new().fg(styles::ACCENT).add_modifier(Modifier::BOLD),
             3 => Style::new()
                 .fg(styles::ROLE_ASSISTANT)
                 .add_modifier(Modifier::BOLD),
@@ -152,10 +150,9 @@ impl<'a> Widget for MarkdownViewer<'a> {
                 // Scroll positions are 0..=max_scroll. content_length must match that
                 // range so position == content_length-1 pins the thumb to the track end.
                 // (Using line_count here leaves dead track under a fully-scrolled thumb.)
-                let mut scrollbar_state = ratatui::widgets::ScrollbarState::new(
-                    (max_scroll as usize).saturating_add(1),
-                )
-                .position(scroll as usize);
+                let mut scrollbar_state =
+                    ratatui::widgets::ScrollbarState::new((max_scroll as usize).saturating_add(1))
+                        .position(scroll as usize);
 
                 StatefulWidget::render(scrollbar, bar_area, buf, &mut scrollbar_state);
             }

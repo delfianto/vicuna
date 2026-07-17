@@ -59,10 +59,7 @@ impl ModelPicker {
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(styles::ACCENT))
             .style(Style::default().bg(styles::BG_SURFACE))
-            .title(Span::styled(
-                " pick model ",
-                styles::accent_bold(),
-            ));
+            .title(Span::styled(" pick model ", styles::accent_bold()));
 
         f.render_widget(Clear, box_area);
         f.render_widget(plate, box_area);

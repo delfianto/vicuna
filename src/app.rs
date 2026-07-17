@@ -27,7 +27,10 @@ impl UiHits {
 
     fn contains(r: Option<Rect>, col: u16, row: u16) -> bool {
         r.is_some_and(|r| {
-            col >= r.x && col < r.x.saturating_add(r.width) && row >= r.y && row < r.y.saturating_add(r.height)
+            col >= r.x
+                && col < r.x.saturating_add(r.width)
+                && row >= r.y
+                && row < r.y.saturating_add(r.height)
         })
     }
 }
@@ -241,11 +244,7 @@ impl App {
     fn regenerate(&mut self) -> Vec<Action> {
         let mut actions = self.cancel_generation();
 
-        while self
-            .messages
-            .last()
-            .is_some_and(|m| m.role == "assistant")
-        {
+        while self.messages.last().is_some_and(|m| m.role == "assistant") {
             self.messages.pop();
         }
 
@@ -350,10 +349,10 @@ impl App {
 
     /// Keep selection on `current_session_id` after a full list replace.
     pub fn select_current_session(&mut self) {
-        if let Some(id) = &self.current_session_id {
-            if let Some(i) = self.sessions.iter().position(|s| s.id.0 == *id) {
-                self.selected_session_index = i;
-            }
+        if let Some(id) = &self.current_session_id
+            && let Some(i) = self.sessions.iter().position(|s| s.id.0 == *id)
+        {
+            self.selected_session_index = i;
         }
     }
 
@@ -521,14 +520,16 @@ impl App {
                     } else {
                         self.scroll_info_down(step);
                     }
-                } else if UiHits::contains(self.hits.sessions, col, row) && !self.sessions.is_empty()
+                } else if UiHits::contains(self.hits.sessions, col, row)
+                    && !self.sessions.is_empty()
                 {
                     if up {
                         self.selected_session_index = self.selected_session_index.saturating_sub(1);
                     } else if self.selected_session_index + 1 < self.sessions.len() {
                         self.selected_session_index += 1;
                     }
-                } else if UiHits::contains(self.hits.models_list, col, row) && !self.models.is_empty()
+                } else if UiHits::contains(self.hits.models_list, col, row)
+                    && !self.models.is_empty()
                 {
                     if up {
                         self.selected_model_index = self.selected_model_index.saturating_sub(1);
@@ -558,10 +559,10 @@ impl App {
                 }
                 if UiHits::contains(self.hits.sessions, col, row) {
                     self.enter_sessions();
-                    if let Some(idx) = row_index_in_list(self.hits.sessions, row) {
-                        if idx < self.sessions.len() {
-                            self.selected_session_index = idx;
-                        }
+                    if let Some(idx) = row_index_in_list(self.hits.sessions, row)
+                        && idx < self.sessions.len()
+                    {
+                        self.selected_session_index = idx;
                     }
                     return vec![];
                 }
@@ -578,14 +579,14 @@ impl App {
                 if UiHits::contains(self.hits.models_list, col, row) {
                     self.models_focus = ModelsFocus::List;
                     // Header row lives above data; row 0 is first model.
-                    if let Some(idx) = row_index_in_table(self.hits.models_list, row) {
-                        if idx < self.models.len() {
-                            self.selected_model_index = idx;
-                            if self.show_info
-                                && let Some(model) = self.models.get(self.selected_model_index)
-                            {
-                                return vec![Action::ShowModelInfo(ModelName(model.name.clone()))];
-                            }
+                    if let Some(idx) = row_index_in_table(self.hits.models_list, row)
+                        && idx < self.models.len()
+                    {
+                        self.selected_model_index = idx;
+                        if self.show_info
+                            && let Some(model) = self.models.get(self.selected_model_index)
+                        {
+                            return vec![Action::ShowModelInfo(ModelName(model.name.clone()))];
                         }
                     }
                     return vec![];
@@ -603,8 +604,7 @@ impl App {
         }
 
         // Global Ctrl+C — cancel stream / double-tap to quit (LLM harness style).
-        if matches!(key.code, KeyCode::Char('c')) && key.modifiers.contains(KeyModifiers::CONTROL)
-        {
+        if matches!(key.code, KeyCode::Char('c')) && key.modifiers.contains(KeyModifiers::CONTROL) {
             return self.handle_ctrl_c();
         }
 
@@ -631,8 +631,8 @@ impl App {
         let is_tab = matches!(key.code, KeyCode::Tab | KeyCode::BackTab)
             || matches!(key.code, KeyCode::Char('\t'));
         if is_tab {
-            let reverse = matches!(key.code, KeyCode::BackTab)
-                || key.modifiers.contains(KeyModifiers::SHIFT);
+            let reverse =
+                matches!(key.code, KeyCode::BackTab) || key.modifiers.contains(KeyModifiers::SHIFT);
             return self.cycle_panel_focus(reverse);
         }
 
@@ -989,7 +989,8 @@ impl App {
 
                     self.input = tui_textarea::TextArea::default();
                     self.input.set_placeholder_text("message…");
-                    self.input.set_cursor_line_style(ratatui::style::Style::default());
+                    self.input
+                        .set_cursor_line_style(ratatui::style::Style::default());
 
                     self.is_generating = true;
                     self.generation_cancelled = false;
@@ -1452,10 +1453,7 @@ mod tests {
         assert_eq!(app.messages[0].role, "user");
         assert!(app.is_generating);
         assert!(actions.contains(&Action::DeleteLastAssistant(SessionId("s1".into()))));
-        assert!(actions.contains(&Action::Generate(
-            "hello".into(),
-            ModelName("m1".into())
-        )));
+        assert!(actions.contains(&Action::Generate("hello".into(), ModelName("m1".into()))));
     }
 
     #[test]
