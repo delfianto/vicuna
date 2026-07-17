@@ -165,9 +165,7 @@ pub async fn run_app(
                                 .await;
                         }
                         // Refine list title from the first user turn once the reply is done.
-                        if let Some(user_prompt) =
-                            app.messages.iter().find(|m| m.role == "user")
-                        {
+                        if let Some(user_prompt) = app.messages.iter().find(|m| m.role == "user") {
                             let title = App::final_session_title(&user_prompt.content);
                             app.rename_session_local(&session_id, title.clone());
                             let _ = action_tx
@@ -197,7 +195,9 @@ fn draw_chrome_bar(f: &mut Frame, app: &App, area: Rect) {
     let keys = current_help_keys(app);
 
     // Measure a reasonable keys budget: prefer ~55% of the row for bindings.
-    let keys_budget = (area.width as usize * 55 / 100).max(20).min(area.width as usize);
+    let keys_budget = (area.width as usize * 55 / 100)
+        .max(20)
+        .min(area.width as usize);
     let help = styles::help_line(keys, keys_budget as u16);
     let help_w: u16 = help
         .spans
@@ -209,10 +209,7 @@ fn draw_chrome_bar(f: &mut Frame, app: &App, area: Rect) {
 
     let zones = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Min(10),
-            Constraint::Length(help_w),
-        ])
+        .constraints([Constraint::Min(10), Constraint::Length(help_w)])
         .split(area);
 
     // ── Left: brand · tabs · session · mode ─────────────────────────────────
@@ -339,9 +336,7 @@ fn draw_chrome_bar(f: &mut Frame, app: &App, area: Rect) {
     if app.is_generating {
         left.push(Span::styled(
             format!(" {} ", app.spinner_glyph()),
-            Style::default()
-                .fg(styles::OK)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(styles::OK).add_modifier(Modifier::BOLD),
         ));
     }
 

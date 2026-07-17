@@ -29,7 +29,12 @@ pub fn draw(f: &mut Frame, toast: &Toast, area: Rect) {
         .style(Style::default().bg(styles::BG_SURFACE));
 
     let p = Paragraph::new(Line::from(vec![
-        Span::styled(" ● ", Style::default().fg(toast.color).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " ● ",
+            Style::default()
+                .fg(toast.color)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::styled(toast.message.clone(), styles::text()),
     ]))
     .block(block);
