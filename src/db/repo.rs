@@ -90,6 +90,18 @@ pub async fn create_session(
     Ok(())
 }
 
+pub async fn rename_session(conn: &Connection, id: &SessionId, title: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE sessions SET title = :title WHERE id = :id",
+        named_params! {
+            ":id": id.0.clone(),
+            ":title": title,
+        },
+    )
+    .await?;
+    Ok(())
+}
+
 pub async fn get_sessions(conn: &Connection) -> Result<Vec<Session>> {
     let mut rows = conn
         .query(
@@ -152,6 +164,21 @@ pub async fn add_message(
     Ok(())
 }
 
+/// Remove the most recent assistant message for a session (regen / cancel cleanup).
+pub async fn delete_last_assistant(conn: &Connection, session_id: &SessionId) -> Result<()> {
+    conn.execute(
+        "DELETE FROM messages WHERE id = (
+            SELECT id FROM messages
+            WHERE session_id = :sid AND role = 'assistant'
+            ORDER BY id DESC
+            LIMIT 1
+        )",
+        named_params! { ":sid": session_id.0.clone() },
+    )
+    .await?;
+    Ok(())
+}
+
 pub async fn get_messages(conn: &Connection, session_id: &SessionId) -> Result<Vec<Message>> {
     let mut rows = conn
         .query(
@@ -207,7 +234,12 @@ mod tests {
         let msgs = get_messages(&conn, &sid).await.unwrap();
         assert_eq!(msgs.len(), 2);
         assert_eq!(msgs[0].role, "user");
-        assert_eq!(msgs[1].role, "assistant");
+
+        delete_last_assistant(&conn, &sid).await.unwrap();
+        let msgs = get_messages(&conn, &sid).await.unwrap();
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0].role, "user");
+        assert_eq!(msgs[0].content, "hello");
 
         delete_session(&conn, &sid).await.unwrap();
         let sessions = get_sessions(&conn).await.unwrap();

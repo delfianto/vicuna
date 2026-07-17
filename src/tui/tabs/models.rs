@@ -1,51 +1,81 @@
 use crate::api::modelfile;
-use crate::app::{App, ModelsFocus};
+use crate::app::{App, ModelsFocus, SortColumn};
 use crate::tui::styles;
 use crate::utils::vram;
 use chrono::DateTime;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
-    widgets::{Block, BorderType, Borders, Cell, Paragraph, Row, Table, TableState, Wrap},
+    style::{Modifier, Style},
+    text::{Line, Span},
+    widgets::{Cell, Paragraph, Row, Table, TableState, Wrap},
 };
 
-pub fn draw(f: &mut Frame, app: &App, area: Rect) {
-    let main_area = if app.show_info {
-        let chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(area);
-        draw_info_pane(f, app, chunks[1]);
-        chunks[0]
+pub fn draw(f: &mut Frame, app: &mut App, area: Rect) {
+    let table_area = if app.show_info {
+        let (table_area, info_area) = styles::split_horizontal(
+            area,
+            Constraint::Percentage(55),
+            Constraint::Percentage(45),
+        );
+        app.hits.models_info = Some(info_area);
+        draw_info_pane(f, app, info_area);
+        table_area
     } else {
+        app.hits.models_info = None;
         area
     };
 
-    let header_style = Style::default()
-        .fg(Color::LightCyan)
-        .add_modifier(Modifier::BOLD);
+    app.hits.models_list = Some(table_area);
+    app.hits.sessions = None;
+    app.hits.messages = None;
+    app.hits.composer = None;
 
-    let mut header_titles = vec!["#", "Name", "Family", "Size", "Quant", "Params", "VRAM"];
+    draw_table(f, app, table_area);
+}
+
+fn header_cell(label: &str, sort: SortColumn, active: SortColumn) -> Cell<'_> {
+    let mark = styles::sort_mark(sort == active, true);
+    let text = format!("{label}{mark}");
+    let style = if sort == active {
+        Style::default()
+            .fg(styles::ACCENT)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default()
+            .fg(styles::TEXT_MUTED)
+            .add_modifier(Modifier::BOLD)
+    };
+    Cell::from(text).style(style)
+}
+
+fn draw_table(f: &mut Frame, app: &App, table_area: Rect) {
+    let list_focused = !app.show_info || app.models_focus == ModelsFocus::List;
+
+    let mut header_cells = vec![
+        Cell::from("#").style(styles::muted().add_modifier(Modifier::BOLD)),
+        header_cell("name", SortColumn::Name, app.sort_column),
+        Cell::from("family").style(styles::muted().add_modifier(Modifier::BOLD)),
+        header_cell("size", SortColumn::Size, app.sort_column),
+        Cell::from("quant").style(styles::muted().add_modifier(Modifier::BOLD)),
+        Cell::from("params").style(styles::muted().add_modifier(Modifier::BOLD)),
+        Cell::from("vram≈").style(styles::muted().add_modifier(Modifier::BOLD)),
+    ];
     if !app.show_info {
-        header_titles.push("Modified");
+        header_cells.push(header_cell("modified", SortColumn::Modified, app.sort_column));
     }
-
-    let header_cells = header_titles
-        .iter()
-        .map(|h| Cell::from(*h).style(header_style));
-    let header = Row::new(header_cells).height(1).bottom_margin(1);
+    let header = Row::new(header_cells).height(1).bottom_margin(0);
 
     let rows = app.models.iter().enumerate().map(|(i, model)| {
         let details = model.details.as_ref();
-        let family = details.map(|d| d.family.as_str()).unwrap_or("?");
+        let family = details.map(|d| d.family.as_str()).unwrap_or("—");
         let size_str = vram::format_size(model.size);
 
         let mut quant_str = details
             .map(|d| d.quantization_level.clone())
-            .unwrap_or_else(|| "?".to_string());
+            .unwrap_or_else(|| "—".to_string());
 
-        let params_str = details.map(|d| d.parameter_size.as_str()).unwrap_or("?");
+        let params_str = details.map(|d| d.parameter_size.as_str()).unwrap_or("—");
 
         let mut q_bits = modelfile::parse_quantization_bits(&quant_str);
 
@@ -75,122 +105,133 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
         let vram_str = if vram_est > 0 {
             vram::format_size(vram_est)
         } else {
-            "?".to_string()
+            "—".to_string()
         };
 
         let display_name = modelfile::sanitize_model_name(&model.name).to_lowercase();
 
         let mut cells = vec![
-            Cell::from((i + 1).to_string()).style(Style::default().fg(Color::DarkGray)),
-            Cell::from(display_name).style(Style::default().fg(Color::Magenta)),
-            Cell::from(family).style(Style::default().fg(Color::Cyan)),
-            Cell::from(size_str).style(Style::default().fg(Color::Green)),
-            Cell::from(quant_str).style(Style::default().fg(Color::Yellow)),
-            Cell::from(params_str).style(Style::default().fg(Color::LightRed)),
-            Cell::from(vram_str).style(Style::default().fg(Color::LightBlue)),
+            Cell::from((i + 1).to_string()).style(styles::dim()),
+            Cell::from(display_name).style(styles::text()),
+            Cell::from(family).style(styles::muted()),
+            Cell::from(size_str).style(Style::default().fg(styles::OK)),
+            Cell::from(quant_str).style(styles::accent()),
+            Cell::from(params_str).style(styles::muted()),
+            Cell::from(vram_str).style(styles::muted()),
         ];
 
         if !app.show_info {
             let date_str = if let Ok(dt) = DateTime::parse_from_rfc3339(&model.modified_at) {
-                dt.format("%Y-%m-%d %H:%M:%S").to_string()
+                dt.format("%Y-%m-%d %H:%M").to_string()
             } else {
                 model.modified_at.clone()
             };
-            cells.push(Cell::from(date_str).style(Style::default().fg(Color::DarkGray)));
+            cells.push(Cell::from(date_str).style(styles::dim()));
         }
 
         Row::new(cells).height(1)
     });
 
     let mut constraints = vec![
-        Constraint::Length(4),
-        Constraint::Percentage(26),
+        Constraint::Length(3),
+        Constraint::Percentage(28),
+        Constraint::Percentage(12),
         Constraint::Percentage(10),
-        Constraint::Percentage(10),
-        Constraint::Percentage(10),
+        Constraint::Percentage(12),
         Constraint::Percentage(10),
         Constraint::Percentage(10),
     ];
     if !app.show_info {
-        constraints.push(Constraint::Percentage(20));
+        constraints.push(Constraint::Percentage(14));
     }
 
-    let (border_style, border_type) = if !app.show_info || app.models_focus == ModelsFocus::List {
-        (
-            Style::default()
-                .fg(Color::LightYellow)
-                .add_modifier(Modifier::BOLD),
-            BorderType::Thick,
-        )
+    let n = app.models.len();
+    let title = if n == 0 {
+        "models".to_string()
     } else {
-        (Style::default().fg(Color::LightMagenta), BorderType::Plain)
+        format!("models · {n}")
     };
 
     let t = Table::new(rows, constraints)
         .header(header)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(border_type)
-                .title(format!(" Models (Sorted by {:?}) ", app.sort_column))
-                .border_style(border_style),
-        )
-        .row_highlight_style(styles::HIGHLIGHT_STYLE);
+        .block(styles::pane_block(title, list_focused))
+        .row_highlight_style(styles::HIGHLIGHT_STYLE)
+        .column_spacing(2);
 
     let mut state = TableState::default();
-    state.select(Some(app.selected_model_index));
+    if !app.models.is_empty() {
+        state.select(Some(app.selected_model_index));
+    }
 
-    f.render_stateful_widget(t, main_area, &mut state);
+    f.render_stateful_widget(t, table_area, &mut state);
+
+    // Empty library hint
+    if app.models.is_empty() {
+        let hint = Paragraph::new(vec![
+            Line::from(Span::styled("no models yet", styles::accent_bold())),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("[p] ", styles::key_cap()),
+                Span::styled("pull something like llama3.2", styles::key_desc()),
+            ]),
+        ])
+        .alignment(ratatui::layout::HorizontalAlignment::Center);
+        let inner = styles::pane_block("", false).inner(table_area);
+        let mid = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Min(1),
+                Constraint::Length(3),
+                Constraint::Min(1),
+            ])
+            .split(inner);
+        f.render_widget(hint, mid[1]);
+    }
 }
 
 fn draw_info_pane(f: &mut Frame, app: &App, area: Rect) {
-    let (border_style, border_type) = if app.models_focus == ModelsFocus::Info {
-        (
-            Style::default()
-                .fg(Color::LightYellow)
-                .add_modifier(Modifier::BOLD),
-            BorderType::Thick,
-        )
-    } else {
-        let border_color = styles::RAINBOW[app.selected_model_index % styles::RAINBOW.len()];
-        (Style::default().fg(border_color), BorderType::Rounded)
-    };
+    let focused = app.models_focus == ModelsFocus::Info;
+    let model_name = app
+        .models
+        .get(app.selected_model_index)
+        .map(|m| m.name.as_str())
+        .unwrap_or("details");
 
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(border_type)
-        .border_style(border_style)
-        .title(" Model Details ");
+    let block = styles::pane_block(format!("details · {model_name}"), focused);
 
     if let Some(ref info) = app.model_info {
         let mut details = String::new();
 
         if let Some(ref template) = info.template {
-            details.push_str("# Template\n");
+            details.push_str("## template\n\n");
             details.push_str(template);
             details.push_str("\n\n");
         }
 
         if let Some(ref parameters) = info.parameters {
-            details.push_str("# Parameters\n");
+            details.push_str("## parameters\n\n");
             details.push_str(parameters);
             details.push_str("\n\n");
         }
 
         if let Some(ref license) = info.license {
-            details.push_str("# License\n");
+            details.push_str("## license\n\n");
             details.push_str(license);
+        }
+
+        if details.trim().is_empty() {
+            details = "_no extra metadata from ollama_".into();
         }
 
         let inner_area = block.inner(area);
 
-        let mut visual_lines = 0;
+        let mut visual_lines = 0u16;
         for line in details.lines() {
             let len = line.chars().count() as u16;
             if len == 0 {
                 visual_lines += 1;
             } else {
-                visual_lines += len.div_ceil(inner_area.width);
+                visual_lines += len.div_ceil(inner_area.width.max(1));
             }
         }
 
@@ -200,6 +241,7 @@ fn draw_info_pane(f: &mut Frame, app: &App, area: Rect) {
 
         let p = Paragraph::new(details)
             .block(block)
+            .style(styles::text())
             .wrap(Wrap { trim: false })
             .scroll((scroll, 0));
 
@@ -220,6 +262,11 @@ fn draw_info_pane(f: &mut Frame, app: &App, area: Rect) {
             f.render_stateful_widget(scrollbar, area, &mut scrollbar_state);
         }
     } else {
-        f.render_widget(Paragraph::new("Loading...").block(block), area);
+        let p = Paragraph::new(Line::from(Span::styled(
+            "loading…",
+            styles::muted().add_modifier(Modifier::ITALIC),
+        )))
+        .block(block);
+        f.render_widget(p, area);
     }
 }
