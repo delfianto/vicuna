@@ -120,6 +120,10 @@ pub async fn run_app(
                 }
                 Event::ModelInfoFetched(info) => {
                     app.model_info = Some(info);
+                    // Keep inspect focused when payload arrives.
+                    if app.show_info {
+                        app.models_focus = ModelsFocus::Info;
+                    }
                 }
                 Event::TokenReceived(token) => {
                     let should_append = if let Some(last) = app.messages.last() {
@@ -372,28 +376,29 @@ fn current_help_keys(app: &App) -> &'static [(&'static str, &'static str)] {
             CurrentTab::Models => {
                 if app.show_info {
                     match app.models_focus {
-                        ModelsFocus::Info => {
-                            &[("esc", "back"), ("j/k", "scroll"), ("tab", "list")]
-                        }
-                        ModelsFocus::List => {
-                            &[
-                                ("esc", "chat"),
-                                ("j/k", "nav"),
-                                ("enter", "chat"),
-                                ("i", "info"),
-                                ("p", "pull"),
-                            ]
-                        }
+                        ModelsFocus::Info => &[
+                            ("↑↓", "scroll"),
+                            ("f3/esc", "close"),
+                            ("tab", "list"),
+                            ("j/k", "scroll"),
+                        ],
+                        ModelsFocus::List => &[
+                            ("f3/esc", "close"),
+                            ("tab", "inspect"),
+                            ("j/k", "nav"),
+                            ("enter", "chat"),
+                            ("p", "pull"),
+                        ],
                     }
                 } else {
                     &[
+                        ("f3", "inspect"),
                         ("esc", "chat"),
-                        ("tab", "focus"),
                         ("j/k", "nav"),
                         ("enter", "use"),
-                        ("i", "details"),
-                        ("m", "picker"),
                         ("p", "pull"),
+                        ("d", "delete"),
+                        ("s", "sort"),
                     ]
                 }
             }

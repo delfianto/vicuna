@@ -211,14 +211,18 @@ fn draw_composer(
 
     f.render_widget(&input, area);
 
-    if visual_input_lines > input_height.saturating_sub(2) {
+    let viewport_h = input_height.saturating_sub(2).max(1);
+    if visual_input_lines > viewport_h {
+        // Cursor row is a line index (0..lines-1) — selection-style scrollbar.
+        // viewport_content_length keeps thumb size proportional to visible rows.
         let scrollbar =
             ratatui::widgets::Scrollbar::new(ratatui::widgets::ScrollbarOrientation::VerticalRight)
                 .begin_symbol(Some("▲"))
                 .end_symbol(Some("▼"));
-        let mut scrollbar_state =
-            ratatui::widgets::ScrollbarState::new(visual_input_lines as usize)
-                .position(app.input.cursor().0);
+        let cursor_row = app.input.cursor().0.min(visual_input_lines.saturating_sub(1) as usize);
+        let mut scrollbar_state = ratatui::widgets::ScrollbarState::new(visual_input_lines as usize)
+            .position(cursor_row)
+            .viewport_content_length(viewport_h as usize);
         f.render_stateful_widget(
             scrollbar,
             area.inner(ratatui::layout::Margin {
