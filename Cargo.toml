@@ -16,7 +16,7 @@ reqwest = { version = "0.13.4", features = ["stream", "json"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 thiserror = "2.0.18"
-tokio = { version = "1.53.0", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.53.0", features = ["macros", "rt-multi-thread", "sync", "time"] }
 tokio-util = { version = "0.7.18", features = ["codec", "io"] }
 tracing = "0.1.44"
 tracing-appender = "0.2.5"
@@ -29,4 +29,5 @@ uuid = { version = "1.24.0", features = ["v4", "fast-rng"] }
 [profile.release]
 strip = true
 opt-level = 3
+lto = "thin"
 panic = "abort"
