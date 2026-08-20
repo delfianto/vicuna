@@ -23,7 +23,7 @@ tracing-appender = "0.2.5"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 tui-markdown = "0.3.8"
 # Upstream tui-textarea is stuck on ratatui 0.29; use maintained fork (crate still imports as tui_textarea).
-tui-textarea = { package = "tui-textarea-2", version = "0.12.1" }
+tui-textarea = { package = "tui-textarea-2", version = "0.13.0" }
 uuid = { version = "1.24.0", features = ["v4", "fast-rng"] }
 
 [profile.release]
