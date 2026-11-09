@@ -13,19 +13,19 @@ directories = "6.0.0"
 futures = "0.3.34"
 libsql = "0.10.0"
 ratatui = "0.30.2"
-reqwest = { version = "0.13.4", features = ["stream", "json"] }
+reqwest = { version = "0.13.5", features = ["stream", "json"] }
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
-thiserror = "2.0.20"
-tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "sync", "time"] }
-tokio-util = { version = "0.7.19", features = ["codec", "io"] }
+serde_json = "1.0.154"
+thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+tokio-util = { version = "0.7.20", features = ["codec", "io"] }
 tracing = "0.1.44"
 tracing-appender = "0.2.5"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
-tui-markdown = "0.3.9"
+tui-markdown = "0.3.13"
 # Upstream tui-textarea is stuck on ratatui 0.29; use maintained fork (crate still imports as tui_textarea).
 tui-textarea = { package = "tui-textarea-2", version = "0.13.2" }
-uuid = { version = "1.26.0", features = ["v4", "fast-rng"] }
+uuid = { version = "1.29.2", features = ["v4", "fast-rng"] }
 
 [profile.release]
 strip = true
