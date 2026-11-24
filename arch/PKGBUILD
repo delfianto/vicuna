@@ -1,5 +1,5 @@
 pkgname=vicuna-bin
-pkgver=0.2.0
+pkgver=0.2.1
 pkgrel=1
 pkgdesc='Terminal client for Ollama'
 arch=('x86_64')
@@ -11,10 +11,10 @@ conflicts=('vicuna')
 options=('!strip' '!debug')
 _archive="vicuna-v$pkgver-linux-x86_64"
 source=("$url/releases/download/v$pkgver/$_archive.tar.gz")
-sha256sums=('6c05b08fab4a78fe8389b8415d9452f0a232200eeab026b0b2d3f9241c9a95de')
+sha256sums=('bd635fa5f329d098f5fc1defbf9b46ee38745807791b821d8d55b3d4489be833')
 
 package() {
     cd "$srcdir/$_archive"
-    install -Dm0755 vicuna "$pkgdir/usr/local/bin/vicuna"
+    install -Dm0755 vicuna "$pkgdir/usr/bin/vicuna"
     install -Dm0644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }
