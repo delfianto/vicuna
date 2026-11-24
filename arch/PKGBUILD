@@ -1,16 +1,17 @@
-pkgname=vicuna-bin
+pkgname=vicuna
 pkgver=0.2.1
-pkgrel=1
+pkgrel=2
 pkgdesc='Terminal client for Ollama'
 arch=('x86_64')
 url='https://github.com/delfianto/vicuna'
 license=('MIT')
 depends=('glibc' 'libgcc' 'ca-certificates')
-provides=("vicuna=$pkgver")
-conflicts=('vicuna')
+provides=("vicuna-bin=$pkgver-$pkgrel")
+conflicts=('vicuna-bin')
+replaces=('vicuna-bin')
 options=('!strip' '!debug')
 _archive="vicuna-v$pkgver-linux-x86_64"
-source=("$url/releases/download/v$pkgver/$_archive.tar.gz")
+source=("$url/releases/download/arch-v$pkgver-$pkgrel/$_archive.tar.gz")
 sha256sums=('bd635fa5f329d098f5fc1defbf9b46ee38745807791b821d8d55b3d4489be833')
 
 package() {

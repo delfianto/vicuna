@@ -1,18 +1,19 @@
-pkgbase = vicuna-bin
+pkgbase = vicuna
 	pkgdesc = Terminal client for Ollama
 	pkgver = 0.2.1
-	pkgrel = 1
+	pkgrel = 2
 	url = https://github.com/delfianto/vicuna
 	arch = x86_64
 	license = MIT
 	depends = glibc
 	depends = libgcc
 	depends = ca-certificates
-	provides = vicuna=0.2.1
-	conflicts = vicuna
+	provides = vicuna-bin=0.2.1-2
+	conflicts = vicuna-bin
+	replaces = vicuna-bin
 	options = !strip
 	options = !debug
-	source = https://github.com/delfianto/vicuna/releases/download/v0.2.1/vicuna-v0.2.1-linux-x86_64.tar.gz
+	source = https://github.com/delfianto/vicuna/releases/download/arch-v0.2.1-2/vicuna-v0.2.1-linux-x86_64.tar.gz
 	sha256sums = bd635fa5f329d098f5fc1defbf9b46ee38745807791b821d8d55b3d4489be833
 
-pkgname = vicuna-bin
+pkgname = vicuna
