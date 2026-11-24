@@ -25,6 +25,24 @@
 
 ## Installation
 
+### Arch Linux (x86_64)
+
+The package installs `vicuna`. Configure the Ollama endpoint before connecting. Executables are installed under `/usr/local/bin`.
+
+Download the `.pkg.tar.zst` from [GitHub Releases](https://github.com/delfianto/vicuna/releases/latest)
+and install it with `sudo pacman -U ./<package-file>`, or build the package
+from the checksum-verified release archive with `makepkg -si`:
+
+```sh
+git clone --branch v0.2.0 https://github.com/delfianto/vicuna.git
+cd vicuna/arch
+makepkg -si
+```
+
+### Build from source
+
+Source builds require Rust 1.100.0 or later.
+
 ### Prerequisites
 
 - [Ollama](https://ollama.com/) running locally (default: `http://localhost:11434`).
