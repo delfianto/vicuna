@@ -1,11 +1,11 @@
 [package]
 name = "vicuna"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
-rust-version = "1.98.0"
+rust-version = "1.100.0"
 
 [dependencies]
-anyhow = "1.0.104"
+anyhow = "1.0.105"
 async-stream = "0.3.6"
 chrono = "0.4.45"
 crossterm = { version = "0.29", features = ["event-stream"] }
@@ -25,7 +25,7 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 tui-markdown = "0.3.13"
 # Upstream tui-textarea is stuck on ratatui 0.29; use maintained fork (crate still imports as tui_textarea).
 tui-textarea = { package = "tui-textarea-2", version = "0.14.0" }
-uuid = { version = "1.29.2", features = ["v4", "fast-rng"] }
+uuid = { version = "1.29.3", features = ["v4", "fast-rng"] }
 
 [profile.release]
 strip = true
